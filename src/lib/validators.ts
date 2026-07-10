@@ -338,10 +338,8 @@ export const empleadoCreateSchema = z
     jornada: reqStr('Selecciona la jornada'),
     temporalidad_contrato: reqStr('Selecciona una opción'),
     tipo_contrato: reqStr('Selecciona una opción'),
-    fecha_contratacion: isoDate.refine(
-      (v) => new Date(v).getTime() <= Date.now(),
-      'La fecha de contratación no puede ser futura',
-    ),
+    // La fecha de contratación puede ser futura (contrataciones programadas).
+    fecha_contratacion: isoDate,
     fecha_reingreso: z.string().optional().or(z.literal('')).refine(
       (v) => !v || !Number.isNaN(new Date(v).getTime()),
       'Fecha inválida',
