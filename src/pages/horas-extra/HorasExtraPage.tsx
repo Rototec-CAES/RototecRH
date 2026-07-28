@@ -28,7 +28,7 @@ import {
   useHorasExtraExcluidos,
 } from '@/hooks/useHorasExtra'
 import { horasExtraApi } from '@/api/horas-extra'
-import { apellidosNombre, cn } from '@/lib/utils'
+import { apellidosNombre, cn, formatCatorcena, formatRangoCorto } from '@/lib/utils'
 import { exportarExcluidos, exportarHorasExtra } from '@/lib/exportHorasExtra'
 import type { DesgloseSemanaHE, DetalleDiaHE, EmpleadoBackend, ExcluidoHE, FuenteTurno } from '@/types'
 
@@ -239,7 +239,9 @@ export default function HorasExtraPage() {
         </div>
         <div>
           <h1 className="text-lg font-semibold leading-none tracking-tight">Horas Extra</h1>
-          <p className="mt-1 text-xs text-muted-foreground">Semanas lun–dom · cálculo por quincena</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Cálculo por catorcena · la catorcena y sus 2 semanas arrancan en la fecha «Desde»
+          </p>
         </div>
       </div>
 
@@ -311,7 +313,7 @@ export default function HorasExtraPage() {
             <TableRow>
               <TableHead>Empleado</TableHead>
               <TableHead>Fuente</TableHead>
-              <TableHead>Periodo</TableHead>
+              <TableHead>Catorcena</TableHead>
               <TableHead>Sistema(s)</TableHead>
               <TableHead className="text-right">Efectivas</TableHead>
               <TableHead className="text-right">Saldo</TableHead>
@@ -346,7 +348,9 @@ export default function HorasExtraPage() {
                 <TableRow key={`${f.idEmpleado}-${f.periodo}`}>
                   <TableCell><NombreCell nombre={f.nombre} /></TableCell>
                   <TableCell><FuenteBadge fuente={f.fuente} /></TableCell>
-                  <TableCell className="text-xs tabular-nums text-muted-foreground">{f.periodo}</TableCell>
+                  <TableCell className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">
+                    {formatCatorcena(f.periodo)}
+                  </TableCell>
                   <TableCell className="text-xs text-muted-foreground">{f.sistemas.join(' · ') || '—'}</TableCell>
                   <TableCell className="text-right tabular-nums">{hhDecimal(f.horasEfectivas)}</TableCell>
                   <TableCell
@@ -521,11 +525,11 @@ function fmtHora(h: string): string {
 function fmt2(n: number): string {
   return n.toFixed(2)
 }
-function mesQuincena(periodo: string): string {
-  // "2026-05-Qui1" → "MAYO Qui1"
-  const [, mm, qui] = periodo.split('-')
-  const MESES = ['', 'ENE', 'FEB', 'MAR', 'ABR', 'MAYO', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC']
-  return `${MESES[Number(mm)] ?? mm} ${qui ?? ''}`.trim()
+/** Nº de días que cubre el periodo "AAAA-MM-DD..AAAA-MM-DD" (14 salvo la última catorcena cortada). */
+function diasDelPeriodo(periodo: string): number {
+  const [desde, hasta] = periodo.split('..')
+  if (!desde || !hasta) return 0
+  return Math.round((Date.parse(`${hasta}T00:00:00Z`) - Date.parse(`${desde}T00:00:00Z`)) / 86_400_000) + 1
 }
 function rangoHoras(a: string | null, b: string | null): string {
   const ha = a ? fmtHora(a) : '—'
@@ -663,7 +667,7 @@ function DetalleDialog({
         <DialogHeader>
           <DialogTitle>Detalle — {empleado?.nombre}</DialogTitle>
           <DialogDescription>
-            Cálculo por semana de la quincena ({desde} – {hasta})
+            Cálculo por semana de la catorcena ({desde} – {hasta})
           </DialogDescription>
         </DialogHeader>
 
@@ -680,7 +684,13 @@ function DetalleDialog({
               return (
                 <div key={periodo} className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <h4 className="text-sm font-semibold">{mesQuincena(periodo)}</h4>
+                    <h4 className="text-sm font-semibold">
+                      {formatCatorcena(periodo)}
+                      <span className="ml-2 font-normal text-muted-foreground">
+                        {diasDelPeriodo(periodo)} días
+                        {diasDelPeriodo(periodo) < 14 && ' · catorcena incompleta'}
+                      </span>
+                    </h4>
                     <div className="flex gap-2 text-xs">
                       <span className="rounded-md bg-amber-50 px-2 py-1 font-medium text-amber-700">
                         HE diurnas {fmt2(heDia)}
@@ -698,12 +708,11 @@ function DetalleDialog({
                       <TableHeader>
                         <TableRow>
                           <TableHead className="whitespace-nowrap">Semana</TableHead>
-                          <TableHead className="whitespace-nowrap">Tipo</TableHead>
+                          <TableHead className="whitespace-nowrap">Fechas</TableHead>
+                          <TableHead className="whitespace-nowrap text-right">Días</TableHead>
                           <TableHead className="whitespace-nowrap">Sistema</TableHead>
                           <TableHead className="whitespace-nowrap text-right">Efectivas</TableHead>
-                          <TableHead className="whitespace-nowrap text-right">Ord. compl.</TableHead>
-                          <TableHead className="whitespace-nowrap text-right">Ord. divid.</TableHead>
-                          <TableHead className="whitespace-nowrap text-right">Ord. total</TableHead>
+                          <TableHead className="whitespace-nowrap text-right">Ordinarias</TableHead>
                           <TableHead className="whitespace-nowrap text-right">Excedente</TableHead>
                           <TableHead className="whitespace-nowrap text-right">Prop. día</TableHead>
                           <TableHead className="whitespace-nowrap text-right">Prop. noche</TableHead>
@@ -713,19 +722,22 @@ function DetalleDialog({
                       </TableHeader>
                       <TableBody>
                         {filas.map((f) => (
-                          <TableRow key={f.semana}>
+                          <TableRow key={`${f.periodo}#${f.semana}`}>
                             <TableCell className="tabular-nums">{f.semana}</TableCell>
-                            <TableCell className="text-xs capitalize text-muted-foreground">
-                              {f.tipoQuincena} ({f.diasEnQuincena}d)
+                            <TableCell className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">
+                              {formatRangoCorto(f.desde, f.hasta)}
+                            </TableCell>
+                            <TableCell
+                              className={cn(
+                                'text-right tabular-nums',
+                                f.tipoSemana === 'parcial' ? 'font-medium text-amber-600' : 'text-muted-foreground',
+                              )}
+                              title={f.tipoSemana === 'parcial' ? 'Semana incompleta: ordinarias prorrateadas' : undefined}
+                            >
+                              {f.diasEnSemana}
                             </TableCell>
                             <TableCell className="text-xs tabular-nums">{f.sistema}</TableCell>
                             <TableCell className="text-right tabular-nums">{fmt2(f.horasEfectivas)}</TableCell>
-                            <TableCell className="text-right tabular-nums text-muted-foreground">
-                              {fmt2(f.ordinariasCompleta)}
-                            </TableCell>
-                            <TableCell className="text-right tabular-nums text-muted-foreground">
-                              {fmt2(f.ordinariasDividida)}
-                            </TableCell>
                             <TableCell className="text-right tabular-nums">{fmt2(f.ordinariasTotal)}</TableCell>
                             <TableCell
                               className={cn(
@@ -751,7 +763,7 @@ function DetalleDialog({
                         ))}
                         {/* Horas extra finales = suma de saldos (sin multiplicador, sin neteo) */}
                         <TableRow className="border-t-2 bg-muted/40 font-semibold">
-                          <TableCell colSpan={10} className="text-right">
+                          <TableCell colSpan={9} className="text-right">
                             Horas extra finales · total {fmt2(heDia + heNoche)}
                           </TableCell>
                           <TableCell className="text-right tabular-nums text-amber-700">{fmt2(heDia)}</TableCell>

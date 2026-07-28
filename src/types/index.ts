@@ -236,8 +236,10 @@ export interface VerificacionAsistencia {
 }
 
 // Horas extra calculadas por el motor (réplica del Machote) — GET /rrhh/horas-extra/calcular.
+// El periodo es una CATORCENA de 14 días anclada al primer día del rango consultado (no la
+// quincena de calendario); un rango más largo se parte en catorcenas consecutivas.
 export interface HorasExtraPeriodo {
-  periodo: string                        // "AAAA-MM-Qui" (ej "2026-05-Qui1")
+  periodo: string                        // "AAAA-MM-DD..AAAA-MM-DD" (ej "2026-05-04..2026-05-17")
   dia: number                            // horas extra diurnas a pagar
   noche: number                          // horas extra nocturnas a pagar
   horasEfectivas: number                 // total de horas efectivas trabajadas
@@ -294,16 +296,17 @@ export interface PreviewTurnos {
   totalAvisos: number
 }
 
-// Desglose por semana de la quincena — GET /rrhh/horas-extra/desglose.
-// Réplica de las filas semanales del Resumen del Machote (cols H-W, sin multiplicador).
+// Desglose por semana de la catorcena — GET /rrhh/horas-extra/desglose.
+// Réplica de las filas semanales del Resumen del Machote (cols H-W, sin multiplicador). Cada fila
+// es un bloque de 7 días contado desde el primer día del rango (no lunes-domingo de calendario).
 export interface DesgloseSemanaHE {
-  periodo: string                        // AAAA-MM-Qui
-  semana: number                         // semana ISO (col K)
-  tipoQuincena: 'completa' | 'dividida'  // col L
-  diasEnQuincena: number
+  periodo: string                        // catorcena "AAAA-MM-DD..AAAA-MM-DD"
+  semana: number                         // 1 ó 2: posición dentro de la catorcena
+  desde: string                          // primer día de la semana
+  hasta: string                          // último día (recortado al final del rango)
+  tipoSemana: 'completa' | 'parcial'     // parcial = última del rango, con menos de 7 días
+  diasEnSemana: number
   horasEfectivas: number                 // col N
-  ordinariasCompleta: number             // col O
-  ordinariasDividida: number             // col P
   ordinariasTotal: number                // col Q
   excedente: number                      // col R (pisado en 0)
   sistema: string                        // col S
@@ -320,9 +323,9 @@ export interface DetalleDiaHE {
   ingreso: string                        // HH:mm:ss — ingreso oficial (validado)
   egreso: string                         // HH:mm:ss — egreso oficial
   efectivas: number                      // horas efectivas del día
-  semana: number                         // semana ISO
+  semana: number                         // 1 ó 2: semana dentro de la catorcena
   sistema: string                        // sistema de la semana (ej "0-5-2")
-  periodo: string                        // AAAA-MM-Qui
+  periodo: string                        // catorcena "AAAA-MM-DD..AAAA-MM-DD"
   turnoIngreso: string | null            // programado
   turnoSalida: string | null
   marcaIngreso: string | null            // biométrico

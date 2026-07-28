@@ -1,4 +1,5 @@
 import ExcelJS from 'exceljs'
+import { formatCatorcena } from '@/lib/utils'
 import type { DetalleDiaHE, FuenteTurno } from '@/types'
 
 // =====================================================
@@ -145,7 +146,7 @@ function hojaResumen(wb: ExcelJS.Workbook, filas: FilaExport[], desde: string, h
     { header: '#', width: 5, align: 'center' },
     { header: 'Empleado (Apellidos - Nombres)', width: 38 },
     { header: 'Fuente', width: 12, align: 'center' },
-    { header: 'Periodo', width: 14, align: 'center' },
+    { header: 'Catorcena', width: 22, align: 'center' },
     { header: 'Sistema(s)', width: 14, align: 'center' },
     { header: 'Horas efectivas', width: 13, align: 'right', num: true },
     { header: 'Ordinarias', width: 12, align: 'right', num: true },
@@ -158,7 +159,7 @@ function hojaResumen(wb: ExcelJS.Workbook, filas: FilaExport[], desde: string, h
     ws,
     cols.length,
     'HORAS EXTRA · RESUMEN',
-    `Del ${fechaLarga(desde)} al ${fechaLarga(hasta)}   ·   ${filas.length} registro(s)${notaFiltro}   ·   semanas lun–dom, cálculo por quincena`,
+    `Del ${fechaLarga(desde)} al ${fechaLarga(hasta)}   ·   ${filas.length} registro(s)${notaFiltro}   ·   cálculo por catorcena, semanas de 7 días desde el ${fechaLarga(desde)}`,
   )
   const headRow = 4
   encabezados(ws, cols, headRow)
@@ -171,7 +172,7 @@ function hojaResumen(wb: ExcelJS.Workbook, filas: FilaExport[], desde: string, h
       i + 1,
       f.nombre,
       '', // fuente (badge)
-      f.periodo,
+      formatCatorcena(f.periodo),
       f.sistemas.join(' · ') || '—',
       f.horasEfectivas,
       ordinarias,

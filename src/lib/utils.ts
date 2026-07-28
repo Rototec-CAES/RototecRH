@@ -30,6 +30,31 @@ export function formatDate(iso: string | undefined | null): string {
   })
 }
 
+// =====================================================
+// Catorcena (periodo del cálculo de horas extra)
+// =====================================================
+const MESES_CORTOS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
+
+function diaMes(iso: string): string {
+  const [, m, d] = iso.split('-').map(Number)
+  return `${String(d).padStart(2, '0')} ${MESES_CORTOS[(m ?? 1) - 1] ?? ''}`
+}
+
+/**
+ * El backend devuelve el periodo como "AAAA-MM-DD..AAAA-MM-DD": la catorcena anclada al primer
+ * día del rango consultado. "2026-05-04..2026-05-17" → "04 may – 17 may 2026".
+ */
+export function formatCatorcena(periodo: string): string {
+  const [desde, hasta] = periodo.split('..')
+  if (!desde || !hasta) return periodo
+  return `${diaMes(desde)} – ${diaMes(hasta)} ${hasta.slice(0, 4)}`
+}
+
+/** Rango corto sin año, para columnas angostas: "04 may – 17 may". */
+export function formatRangoCorto(desde: string, hasta: string): string {
+  return `${diaMes(desde)} – ${diaMes(hasta)}`
+}
+
 export interface PartesNombre {
   primerNombre: string
   segundoNombre?: string

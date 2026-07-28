@@ -133,6 +133,7 @@ VITE_USE_MOCK=true                            # 'true' = mock localStorage, 'fal
 Definidas con más detalle en `PLAN_HR_ROTOTEC.md`. Cosas a recordar:
 
 - **Horas extras**: diurnas > 44h/semana, nocturnas > 36h/semana, mixtas > 42h/semana. Pago 1.5× hora ordinaria.
+- **Periodo de horas extra = CATORCENA anclada al rango** (no la quincena de calendario). La catorcena empieza en la fecha «Desde» que se elige en la pantalla, aunque en el calendario real no sea inicio de catorcena, y sus semanas son bloques de 7 días desde ese mismo día (no lunes–domingo), así que siempre son 2 semanas completas sin prorrateo. Un rango más largo se parte en catorcenas consecutivas y la última, si no llega a 14 días, se prorratea. Lo calcula el backend en `recursos-humanos/src/horas-extra/lib/` (`calendario.ts` + `motor.ts`); el `periodo` viaja como `"AAAA-MM-DD..AAAA-MM-DD"`. **La planilla y las bonificaciones siguen siendo quincenales** — este cambio es sólo del motor de horas extra.
 - **Séptimo día**: si el empleado falta injustificadamente, pierde también el séptimo, pero sólo se descuenta una vez por semana aunque falte varios días.
 - **Bonificación incentivo** Q250 mensuales fijos (Decreto 78-89). No es parte del salario para IGSS ni indemnización.
 - **IGSS**: cuota laboral 4.83%, patronal 12.67%. Sólo sobre salario ordinario.
