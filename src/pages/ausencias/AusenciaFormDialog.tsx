@@ -23,11 +23,34 @@ import {
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { EmpleadoCombobox } from '@/components/ui/employee-combobox'
+import { extractApiErrorMessage } from '@/api/client'
 import { useEmpleadosBackendList } from '@/hooks/useEmpleados'
-import { useActualizarAusencia, useCrearAusencia, useTiposAusencia } from '@/hooks/useAusenciasBackend'
+import {
+  useActualizarAusencia,
+  useAusenciasByEmpleadoBackend,
+  useCrearAusencia,
+  useCrearAusenciasRango,
+  useTiposAusencia,
+} from '@/hooks/useAusenciasBackend'
 import { nombreEmpleado } from '@/lib/utils'
 import { ausenciaCreateSchema, type AusenciaCreateValues } from '@/lib/validators'
 import type { AusenciaBackend } from '@/types'
+
+/** Fechas "YYYY-MM-DD" de desde a hasta inclusive, sobre el eje UTC (sin saltos de zona). */
+function listarFechas(desde: string, hasta: string): string[] {
+  const fechas: string[] = []
+  const [y, m, d] = desde.split('-').map(Number)
+  const [hy, hm, hd] = hasta.split('-').map(Number)
+  if ([y, m, d, hy, hm, hd].some((n) => !Number.isFinite(n))) return fechas
+  const cur = new Date(Date.UTC(y, m - 1, d))
+  const fin = Date.UTC(hy, hm - 1, hd)
+  // Tope defensivo: el backend rechaza rangos > 366 días; aquí sólo se usa para el conteo del aviso.
+  while (cur.getTime() <= fin && fechas.length <= 400) {
+    fechas.push(cur.toISOString().slice(0, 10))
+    cur.setUTCDate(cur.getUTCDate() + 1)
+  }
+  return fechas
+}
 
 interface Props {
   open: boolean
@@ -41,6 +64,7 @@ const vacio: AusenciaCreateValues = {
   idEmpleado: undefined as unknown as number,
   tipoAusencia: undefined as unknown as number,
   fechaAusencia: today(),
+  fechaHasta: '',
   fechaSolicitudPermiso: '',
   presentoConstancia: false,
   comentarios: '',
@@ -51,8 +75,9 @@ export function AusenciaFormDialog({ open, onOpenChange, ausencia }: Props) {
   const { data: empleados } = useEmpleadosBackendList()
   const { data: tipos } = useTiposAusencia()
   const crear = useCrearAusencia()
+  const crearRango = useCrearAusenciasRango()
   const actualizar = useActualizarAusencia(ausencia?.id ?? 0)
-  const isPending = crear.isPending || actualizar.isPending
+  const isPending = crear.isPending || crearRango.isPending || actualizar.isPending
 
   const form = useForm<AusenciaCreateValues>({
     resolver: zodResolver(ausenciaCreateSchema),
@@ -66,6 +91,7 @@ export function AusenciaFormDialog({ open, onOpenChange, ausencia }: Props) {
         idEmpleado: ausencia.idEmpleado,
         tipoAusencia: ausencia.tipoAusencia,
         fechaAusencia: ausencia.fechaAusencia?.slice(0, 10) ?? today(),
+        fechaHasta: '', // al editar se toca un solo día, nunca un rango
         fechaSolicitudPermiso: ausencia.fechaSolicitudPermiso?.slice(0, 10) ?? '',
         presentoConstancia: ausencia.presentoConstancia,
         comentarios: ausencia.comentarios ?? '',
@@ -85,9 +111,30 @@ export function AusenciaFormDialog({ open, onOpenChange, ausencia }: Props) {
   const tipoSel = (tipos ?? []).find((t) => t.id === Number(form.watch('tipoAusencia')))
   const errors = form.formState.errors
 
+  const idEmpleadoSel = form.watch('idEmpleado')
+  const desdeSel = form.watch('fechaAusencia')
+  const hastaSel = form.watch('fechaHasta')
+  const esRango = Boolean(hastaSel && hastaSel > desdeSel)
+
+  // Ausencias que ya tiene ese empleado: sirven para avisar cuántos días del rango se van a omitir
+  // ANTES de guardar (el backend los omite igual, pero es mejor que no sea una sorpresa).
+  const { data: yaRegistradas } = useAusenciasByEmpleadoBackend(
+    !editing && idEmpleadoSel ? Number(idEmpleadoSel) : undefined,
+  )
+
+  const resumenRango = useMemo(() => {
+    if (!esRango || !desdeSel || !hastaSel) return null
+    const fechas = listarFechas(desdeSel, hastaSel)
+    if (!fechas.length) return null
+    const ocupadas = new Set((yaRegistradas ?? []).map((a) => a.fechaAusencia.slice(0, 10)))
+    const omitidas = fechas.filter((f) => ocupadas.has(f)).length
+    return { total: fechas.length, omitidas, nuevas: fechas.length - omitidas }
+  }, [esRango, desdeSel, hastaSel, yaRegistradas])
+
   async function onSubmit(values: AusenciaCreateValues) {
     const comentarios = values.comentarios?.trim() || undefined
     const fechaSolicitudPermiso = values.fechaSolicitudPermiso?.trim() || undefined
+    const hasta = values.fechaHasta?.trim()
     try {
       if (ausencia) {
         await actualizar.mutateAsync({
@@ -98,6 +145,22 @@ export function AusenciaFormDialog({ open, onOpenChange, ausencia }: Props) {
           comentarios,
         })
         toast.success('Ausencia actualizada')
+      } else if (hasta && hasta > values.fechaAusencia) {
+        const res = await crearRango.mutateAsync({
+          idEmpleado: values.idEmpleado,
+          tipoAusencia: values.tipoAusencia,
+          desde: values.fechaAusencia,
+          hasta,
+          fechaSolicitudPermiso,
+          presentoConstancia: values.presentoConstancia,
+          comentarios,
+        })
+        const dias = `${res.totalCreadas} ${res.totalCreadas === 1 ? 'día' : 'días'}`
+        toast.success(
+          res.totalOmitidas > 0
+            ? `${dias} registrados · ${res.totalOmitidas} ya tenían ausencia y se omitieron`
+            : `${dias} registrados`,
+        )
       } else {
         await crear.mutateAsync({
           idEmpleado: values.idEmpleado,
@@ -111,7 +174,7 @@ export function AusenciaFormDialog({ open, onOpenChange, ausencia }: Props) {
       }
       onOpenChange(false)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Error al guardar')
+      toast.error(extractApiErrorMessage(err))
     }
   }
 
@@ -141,17 +204,44 @@ export function AusenciaFormDialog({ open, onOpenChange, ausencia }: Props) {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label className="mb-1.5 block">Fecha *</Label>
+              <Label className="mb-1.5 block">{editing ? 'Fecha *' : 'Del *'}</Label>
               <Input type="date" {...form.register('fechaAusencia')} />
               {errors.fechaAusencia && (
                 <p className="mt-1 text-xs text-destructive">{errors.fechaAusencia.message}</p>
               )}
             </div>
-            <div>
+            {!editing && (
+              <div>
+                <Label className="mb-1.5 block">Al</Label>
+                <Input type="date" min={desdeSel || undefined} {...form.register('fechaHasta')} />
+                {errors.fechaHasta ? (
+                  <p className="mt-1 text-xs text-destructive">{errors.fechaHasta.message}</p>
+                ) : (
+                  <p className="mt-1 text-xs text-muted-foreground">Opcional — vacío = un solo día</p>
+                )}
+              </div>
+            )}
+            <div className={editing ? '' : 'col-span-2'}>
               <Label className="mb-1.5 block">Fecha de solicitud</Label>
               <Input type="date" {...form.register('fechaSolicitudPermiso')} />
             </div>
           </div>
+
+          {resumenRango && (
+            <div className="rounded-md border border-sky-200 bg-sky-50 p-3 text-xs text-sky-900">
+              Se {resumenRango.nuevas === 1 ? 'creará' : 'crearán'}{' '}
+              <strong className="tabular-nums">{resumenRango.nuevas}</strong>{' '}
+              {resumenRango.nuevas === 1 ? 'registro' : 'registros'} (un día cada uno).
+              {resumenRango.omitidas > 0 && (
+                <>
+                  {' '}
+                  <strong className="tabular-nums">{resumenRango.omitidas}</strong>{' '}
+                  {resumenRango.omitidas === 1 ? 'día ya tiene' : 'días ya tienen'} ausencia registrada y se{' '}
+                  {resumenRango.omitidas === 1 ? 'omitirá' : 'omitirán'}.
+                </>
+              )}
+            </div>
+          )}
 
           <div>
             <Label className="mb-1.5 block">Tipo *</Label>

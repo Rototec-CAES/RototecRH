@@ -346,7 +346,19 @@ export interface DetalleDiaHE {
   cumplioMeta?: boolean                  // alcanzó el 100% de la meta del día
   horarioAutorizado?: boolean            // horario programado = oficial por meta cumplida (condona llegada tarde y salida temprana)
   unidad?: 'puntos' | 'kg' | null        // unidad de meta/ejecutado
+  ausenciaTipo?: number | null           // tTiposAusencia.Id de la ausencia registrada ese día
+  ausenciaNombre?: string | null         // nombre del tipo ("Vacaciones", "Ausencia Injustificada", …)
+  ausenciaEfecto?: EfectoAusencia | null // qué se le hizo al horario del día por esa ausencia
 }
+
+/**
+ * Efecto de una ausencia registrada sobre el horario del día en el cálculo de horas extra:
+ *  - JORNADA_FIJA: ausencia con goce → pisa el turno programado con 08:00-17:00 (8h efectivas)
+ *  - JORNADA_MEDIA: medio día con goce → 08:00-13:00 (4h efectivas)
+ *  - AUSENTE: sin goce → 0 horas; el turno programado queda sólo como referencia
+ *  - NINGUNO: no altera el cálculo (tipo pendiente de resolución)
+ */
+export type EfectoAusencia = 'JORNADA_FIJA' | 'JORNADA_MEDIA' | 'AUSENTE' | 'NINGUNO'
 
 // Detalle día a día de un empleado, agrupado — GET /rrhh/horas-extra/detalle-todos (para el export).
 export interface DetalleEmpleadoHE {
@@ -684,6 +696,24 @@ export interface CreateAusenciaInput {
 }
 
 export type UpdateAusenciaInput = Partial<Omit<CreateAusenciaInput, 'idEmpleado'>>
+
+/** Alta de una ausencia de varios días: el backend crea una fila por día del rango. */
+export interface CreateAusenciasRangoInput {
+  tipoAusencia: number
+  idEmpleado: number
+  desde: string
+  hasta: string
+  fechaSolicitudPermiso?: string
+  presentoConstancia?: boolean
+  comentarios?: string
+}
+
+export interface CreateAusenciasRangoResult {
+  creadas: AusenciaBackend[]
+  omitidas: string[]        // fechas que ya tenían ausencia registrada y no se tocaron
+  totalCreadas: number
+  totalOmitidas: number
+}
 
 // =====================================================
 // CAPACITACIONES

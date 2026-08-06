@@ -163,18 +163,29 @@ export const ausenciaSchema = z.object({
 export type AusenciaFormValues = z.infer<typeof ausenciaSchema>
 
 // Alta/edición de ausencia contra el backend nuevo (tipo = id del catálogo).
-export const ausenciaCreateSchema = z.object({
-  idEmpleado: z.coerce.number().int().positive('Selecciona un empleado'),
-  tipoAusencia: z.coerce.number().int().positive('Selecciona un tipo'),
-  fechaAusencia: isoDate,
-  fechaSolicitudPermiso: z
-    .string()
-    .optional()
-    .or(z.literal(''))
-    .refine((v) => !v || !Number.isNaN(new Date(v).getTime()), 'Fecha inválida'),
-  presentoConstancia: z.boolean(),
-  comentarios: z.string().max(255).optional().or(z.literal('')),
-})
+export const ausenciaCreateSchema = z
+  .object({
+    idEmpleado: z.coerce.number().int().positive('Selecciona un empleado'),
+    tipoAusencia: z.coerce.number().int().positive('Selecciona un tipo'),
+    fechaAusencia: isoDate,
+    // Fin del rango. Vacío = ausencia de un solo día (fechaAusencia).
+    fechaHasta: z
+      .string()
+      .optional()
+      .or(z.literal(''))
+      .refine((v) => !v || !Number.isNaN(new Date(v).getTime()), 'Fecha inválida'),
+    fechaSolicitudPermiso: z
+      .string()
+      .optional()
+      .or(z.literal(''))
+      .refine((v) => !v || !Number.isNaN(new Date(v).getTime()), 'Fecha inválida'),
+    presentoConstancia: z.boolean(),
+    comentarios: z.string().max(255).optional().or(z.literal('')),
+  })
+  .refine((v) => !v.fechaHasta || v.fechaHasta >= v.fechaAusencia, {
+    message: 'El fin del rango no puede ser anterior al inicio',
+    path: ['fechaHasta'],
+  })
 
 export type AusenciaCreateValues = z.infer<typeof ausenciaCreateSchema>
 

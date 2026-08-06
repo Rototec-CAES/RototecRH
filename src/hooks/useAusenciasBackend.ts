@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ausenciasBackendApi } from '@/api/ausenciasBackend'
-import type { CreateAusenciaInput, UpdateAusenciaInput } from '@/types'
+import type { CreateAusenciaInput, CreateAusenciasRangoInput, UpdateAusenciaInput } from '@/types'
 
 const HORA = 1000 * 60 * 60
 const QK = {
@@ -30,6 +30,15 @@ export function useCrearAusencia() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (input: CreateAusenciaInput) => ausenciasBackendApi.create(input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: QK.all }),
+  })
+}
+
+/** Alta de varios días de una sola vez (vacaciones, suspensiones). Omite los días ya registrados. */
+export function useCrearAusenciasRango() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: CreateAusenciasRangoInput) => ausenciasBackendApi.createRango(input),
     onSuccess: () => qc.invalidateQueries({ queryKey: QK.all }),
   })
 }
