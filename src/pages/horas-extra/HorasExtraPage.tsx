@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import { AlertTriangle, Boxes, Check, Clock, Cog, Download, Eye, Loader2, Moon, Package, Search, Sun, UserX, Users, X } from 'lucide-react'
+import { AlertTriangle, Boxes, CalendarOff, Check, Clock, Cog, Download, Eye, Loader2, Moon, Package, Search, Sun, UserX, Users, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -548,11 +548,12 @@ function fmtCumpl(n?: number | null, unidad?: 'puntos' | 'kg' | null): string {
   return `${v}${unidad === 'kg' ? ' kg' : unidad === 'puntos' ? ' pts' : ''}`
 }
 
-function Badge({ tone, children }: { tone: 'red' | 'amber' | 'green'; children: ReactNode }) {
+function Badge({ tone, children }: { tone: 'red' | 'amber' | 'green' | 'blue'; children: ReactNode }) {
   const tones = {
     red: 'bg-rose-100 text-rose-700',
     amber: 'bg-amber-100 text-amber-700',
     green: 'bg-emerald-100 text-emerald-700',
+    blue: 'bg-sky-100 text-sky-700',
   } as const
   return (
     <span
@@ -567,6 +568,29 @@ function Badge({ tone, children }: { tone: 'red' | 'amber' | 'green'; children: 
 }
 
 function EstadoDia({ dia, trabajado }: { dia: DetalleDiaHE; trabajado: boolean }) {
+  // Ausencia registrada por RRHH: el horario del día lo decidió ella, no el reloj. Se muestra el
+  // tipo y qué se le hizo al turno, sin las banderas del biométrico (el backend ya las apaga).
+  if (dia.ausenciaEfecto === 'JORNADA_FIJA') {
+    return (
+      <Badge tone="blue">
+        <CalendarOff className="h-3 w-3" /> {dia.ausenciaNombre ?? 'Ausencia justificada'} · jornada 08:00–17:00
+      </Badge>
+    )
+  }
+  if (dia.ausenciaEfecto === 'JORNADA_MEDIA') {
+    return (
+      <Badge tone="blue">
+        <CalendarOff className="h-3 w-3" /> {dia.ausenciaNombre ?? 'Ausencia medio día'} · media jornada 08:00–13:00
+      </Badge>
+    )
+  }
+  if (dia.ausenciaEfecto === 'AUSENTE') {
+    return (
+      <Badge tone="red">
+        <CalendarOff className="h-3 w-3" /> {dia.ausenciaNombre ?? 'Ausencia'} · sin horas
+      </Badge>
+    )
+  }
   // Turno programado sin ninguna marca → no se presentó (no se infiere asistencia ni se pagan horas).
   if (dia.tipo === 'AUSENTE') {
     return (

@@ -38,6 +38,22 @@
       "Bash(docker compose *)",
       "Bash(curl -sS -o /dev/null -w \"raiz:%{http_code}\\\\n\" http://localhost:5176/)",
       "Bash(curl -sS -o /dev/null -w \"spa-route:%{http_code}\\\\n\" http://localhost:5176/empleados)"
+      "Bash(git -C /home/plemus/WebstormProjects/RototecRH checkout -b feat/cap-licencia-estado-fe)",
+      "mcp__datagrip__list_database_connections",
+      "mcp__datagrip__execute_sql_query",
+      "Bash(curl -s -m 20 -o - -w \"\\\\nHTTP %{http_code}\\\\n\" \"http://138.118.105.246:3001/api/v2/rrhh/ausencias/tipos\")",
+      "Bash(curl -s -m 20 -w \"\\\\nHTTP %{http_code}\\\\n\" \"http://138.118.105.246:3001/api/v2/rrhh/ausencias?desde=2026-07-01&hasta=2026-08-31\")",
+      "Bash(curl -s -m 30 \"http://138.118.105.246:3001/api/v2/rrhh/empleados\")",
+      "Bash(curl *)",
+      "Bash(npx jest *)",
+      "Bash(node -e \"const p=require\\('./package.json'\\);console.log\\(JSON.stringify\\(p.scripts,null,1\\)\\)\")",
+      "Bash(npm install *)",
+      "Bash(node -e \"const p=require\\('./package.json'\\);console.log\\('axios dep:', p.dependencies['@nestjs/axios'] ?? 'AUSENTE en package.json'\\)\")",
+      "Bash(node -e \"const p=require\\('./package.json'\\);console.log\\('@nestjs/common:',p.dependencies['@nestjs/common']\\);console.log\\('axios:',p.dependencies['axios']\\);console.log\\('instalado @nestjs/axios:',require\\('./node_modules/@nestjs/axios/package.json'\\).version\\)\")",
+      "Bash(node -e \"console.log\\('axios instalado:', require\\('./node_modules/axios/package.json'\\).version\\)\")",
+      "Bash(node -e \"const p=require\\('./node_modules/@nestjs/axios/package.json'\\); console.log\\('peerDeps:', JSON.stringify\\(p.peerDependencies\\)\\)\")",
+      "mcp__datagrip__test_database_connection",
+      "Bash(timeout 12 bash -c \"</dev/tcp/api.rototec.com.gt/1433\")"
     ]
   }
 }

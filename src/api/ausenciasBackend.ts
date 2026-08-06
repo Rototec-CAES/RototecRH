@@ -2,6 +2,8 @@ import { rrhhApi, USE_MOCK } from './client'
 import type {
   AusenciaBackend,
   CreateAusenciaInput,
+  CreateAusenciasRangoInput,
+  CreateAusenciasRangoResult,
   TipoAusenciaCatalogo,
   UpdateAusenciaInput,
 } from '@/types'
@@ -21,6 +23,10 @@ const realApi = {
   },
   async create(input: CreateAusenciaInput): Promise<AusenciaBackend> {
     const { data } = await rrhhApi.post<AusenciaBackend>('/ausencias', input)
+    return data
+  },
+  async createRango(input: CreateAusenciasRangoInput): Promise<CreateAusenciasRangoResult> {
+    const { data } = await rrhhApi.post<CreateAusenciasRangoResult>('/ausencias/rango', input)
     return data
   },
   async update(id: number, input: UpdateAusenciaInput): Promise<AusenciaBackend> {
@@ -57,6 +63,9 @@ const mockApi: typeof realApi = {
       pagaIGSS: false,
       fechaCreacion: null,
     }
+  },
+  async createRango() {
+    return { creadas: [], omitidas: [], totalCreadas: 0, totalOmitidas: 0 }
   },
   async update() {
     throw new Error('mock no soportado')
