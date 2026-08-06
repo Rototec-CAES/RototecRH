@@ -9,6 +9,8 @@ const QK = {
     ['asistencias', 'empleado', id, desde, hasta] as const,
   verificacion: (desde: string, hasta: string) =>
     ['asistencias', 'verificacion', desde, hasta] as const,
+  noMarcaron: (desde: string, hasta: string) =>
+    ['asistencias', 'no-marcaron', desde, hasta] as const,
 }
 
 export function useAsistenciasPeriodo(desde: string, hasta: string) {
@@ -18,11 +20,22 @@ export function useAsistenciasPeriodo(desde: string, hasta: string) {
   })
 }
 
-// Verificación marcaje-vs-turno (acabados + producción) en un rango de fechas.
+// Asistencia día a día del rango. Sale del mismo grano que el cálculo de horas extra (turnos de
+// las 4 fuentes + biométrico + ausencias registradas), así que un día de vacaciones viene
+// etiquetado como tal en vez de aparecer como "no vino".
 export function useVerificacionAsistencias(fechaInicial: string, fechaFinal: string) {
   return useQuery({
     queryKey: QK.verificacion(fechaInicial, fechaFinal),
     queryFn: () => asistenciasApi.verificar(fechaInicial, fechaFinal),
+  })
+}
+
+// Programados en el rango que no marcaron NI UNA vez (y sin ausencia que lo explique). El grano
+// los deja fuera del cálculo, por eso van en su propia lista y no como filas de la tabla.
+export function useNoMarcaron(fechaInicial: string, fechaFinal: string) {
+  return useQuery({
+    queryKey: QK.noMarcaron(fechaInicial, fechaFinal),
+    queryFn: () => asistenciasApi.noMarcaron(fechaInicial, fechaFinal),
   })
 }
 

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { CalendarDays, Pencil, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -22,18 +23,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useEmpleadosBackendList } from '@/hooks/useEmpleados'
 import { useAusenciasPeriodoBackend, useEliminarAusencia, useTiposAusencia } from '@/hooks/useAusenciasBackend'
-import { useVerificacionAsistencias } from '@/hooks/useAsistencias'
 import { useAuth } from '@/hooks/useAuth'
 import { quincenaDeHoy, rangoQuincena, type Quincena } from '@/lib/ausencias'
 import { formatDate, nombreEmpleado } from '@/lib/utils'
 import type { AusenciaBackend, EmpleadoBackend } from '@/types'
-import {
-  VerificacionResumen,
-  VerificacionTable,
-} from '@/components/asistencias/verificacion'
 import { AusenciaFormDialog } from './AusenciaFormDialog'
 
 const MESES = [
@@ -55,7 +50,6 @@ export default function AusenciasPage() {
   const [monthIndex, setMonthIndex] = useState<number>(hoy.monthIndex)
   const [quincena, setQuincena] = useState<Quincena>(hoy.num)
   const [empleadoFiltro, setEmpleadoFiltro] = useState<string>('TODOS')
-  const [tab, setTab] = useState<'ausencias' | 'atrasos'>('ausencias')
   const [ausenciaOpen, setAusenciaOpen] = useState(false)
   const [editando, setEditando] = useState<AusenciaBackend | null>(null)
 
@@ -69,7 +63,6 @@ export default function AusenciasPage() {
   const { data: empleados } = useEmpleadosBackendList()
   const tiposQ = useTiposAusencia()
   const ausenciasQ = useAusenciasPeriodoBackend(rango.desde, rango.hasta)
-  const verifQ = useVerificacionAsistencias(rango.desde, rango.hasta)
 
   const empById = useMemo(() => {
     const m = new Map<number, EmpleadoBackend>()
@@ -88,17 +81,6 @@ export default function AusenciasPage() {
     const f = empleadoFiltro === 'TODOS' ? all : all.filter((a) => String(a.idEmpleado) === empleadoFiltro)
     return [...f].sort((a, b) => a.fechaAusencia.localeCompare(b.fechaAusencia))
   }, [ausenciasQ.data, empleadoFiltro])
-
-  // Atrasos detectados por el biométrico (llegó tarde o salió temprano), desde
-  // el endpoint de verificación de asistencias. Es de solo lectura (no manual).
-  const atrasosDetectados = useMemo(() => {
-    const all = (verifQ.data ?? []).filter((v) => v.llegoTarde || v.salioTemprano)
-    const f =
-      empleadoFiltro === 'TODOS'
-        ? all
-        : all.filter((v) => String(v.idEmpleado) === empleadoFiltro)
-    return [...f].sort((a, b) => a.fecha.localeCompare(b.fecha))
-  }, [verifQ.data, empleadoFiltro])
 
   const empleadosActivos = useMemo(() => {
     return (empleados ?? [])
@@ -174,72 +156,63 @@ export default function AusenciasPage() {
         </div>
       </Card>
 
-      <Tabs value={tab} onValueChange={(v) => setTab(v as 'ausencias' | 'atrasos')}>
-        <div className="flex items-center justify-between gap-3">
-          <TabsList>
-            <TabsTrigger value="ausencias">
-              Ausencias <span className="ml-2 rounded bg-muted px-1.5 text-xs">{ausenciasFiltradas.length}</span>
-            </TabsTrigger>
-            <TabsTrigger value="atrasos">
-              Atrasos <span className="ml-2 rounded bg-muted px-1.5 text-xs">{atrasosDetectados.length}</span>
-            </TabsTrigger>
-          </TabsList>
-          {tab === 'ausencias' && (
-            <Button onClick={abrirCrear}><Plus className="h-4 w-4" />Registrar ausencia</Button>
-          )}
+      <div className="space-y-3">
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold">
+              Ausencias
+              <span className="ml-2 rounded bg-muted px-1.5 text-xs font-normal">
+                {ausenciasFiltradas.length}
+              </span>
+            </h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Atrasos, salidas tempranas y no-shows se revisan en{' '}
+              <Link to="/asistencias" className="underline">Asistencias</Link>.
+            </p>
+          </div>
+          <Button onClick={abrirCrear}><Plus className="h-4 w-4" />Registrar ausencia</Button>
         </div>
 
-        <TabsContent value="ausencias" className="mt-3">
-          <Card>
-            <Table>
-              <TableHeader>
+        <Card>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Fecha</TableHead>
+                <TableHead>Día</TableHead>
+                <TableHead>Empleado</TableHead>
+                <TableHead>Tipo</TableHead>
+                <TableHead>Constancia</TableHead>
+                <TableHead className="text-right">Días desc.</TableHead>
+                <TableHead>Séptimo</TableHead>
+                <TableHead>IGSS</TableHead>
+                <TableHead className="w-24"></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {ausenciasQ.isLoading ? (
+                <SkeletonRows colSpan={9} />
+              ) : ausenciasFiltradas.length === 0 ? (
                 <TableRow>
-                  <TableHead>Fecha</TableHead>
-                  <TableHead>Día</TableHead>
-                  <TableHead>Empleado</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead>Constancia</TableHead>
-                  <TableHead className="text-right">Días desc.</TableHead>
-                  <TableHead>Séptimo</TableHead>
-                  <TableHead>IGSS</TableHead>
-                  <TableHead className="w-24"></TableHead>
+                  <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
+                    Sin ausencias en el período
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {ausenciasQ.isLoading ? (
-                  <SkeletonRows colSpan={9} />
-                ) : ausenciasFiltradas.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
-                      Sin ausencias en el período
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  ausenciasFiltradas.map((a) => (
-                    <AusenciaRow
-                      key={a.id}
-                      ausencia={a}
-                      nombre={empById.get(a.idEmpleado) ? nombreEmpleado(empById.get(a.idEmpleado)!) : `#${a.idEmpleado}`}
-                      tipoNombre={tipoNombreById.get(a.tipoAusencia) ?? `#${a.tipoAusencia}`}
-                      onEdit={() => abrirEditar(a)}
-                      puedeEliminar={puedeEliminarAusencia}
-                    />
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="atrasos" className="mt-3 space-y-4">
-          <VerificacionResumen rows={atrasosDetectados} modo="novedades" />
-          <VerificacionTable
-            rows={atrasosDetectados}
-            isLoading={verifQ.isLoading}
-            emptyText="Sin atrasos detectados en el período"
-          />
-        </TabsContent>
-      </Tabs>
+              ) : (
+                ausenciasFiltradas.map((a) => (
+                  <AusenciaRow
+                    key={a.id}
+                    ausencia={a}
+                    nombre={empById.get(a.idEmpleado) ? nombreEmpleado(empById.get(a.idEmpleado)!) : `#${a.idEmpleado}`}
+                    tipoNombre={tipoNombreById.get(a.tipoAusencia) ?? `#${a.tipoAusencia}`}
+                    onEdit={() => abrirEditar(a)}
+                    puedeEliminar={puedeEliminarAusencia}
+                  />
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </Card>
+      </div>
 
       <AusenciaFormDialog
         open={ausenciaOpen}

@@ -1,4 +1,5 @@
 import type {
+  AsistenciaNoMarco,
   RegistroAsistencia,
   RegistroAsistenciaInput,
   VerificacionAsistencia,
@@ -117,6 +118,13 @@ const mockApi = {
     await delay()
     return []
   },
+  async noMarcaron(
+    _fechaInicial: string,
+    _fechaFinal: string,
+  ): Promise<AsistenciaNoMarco[]> {
+    await delay()
+    return []
+  },
 }
 
 // ---------- Real API ----------
@@ -159,6 +167,16 @@ const realApi = {
       '/asistencias/verificar',
       { params: { fechaInicial, fechaFinal } },
     )
+    return data
+  },
+  // GET /rrhh/asistencias/no-marcaron?fechaInicial=YYYY-MM-DD&fechaFinal=YYYY-MM-DD
+  async noMarcaron(
+    fechaInicial: string,
+    fechaFinal: string,
+  ): Promise<AsistenciaNoMarco[]> {
+    const { data } = await api.get<AsistenciaNoMarco[]>('/asistencias/no-marcaron', {
+      params: { fechaInicial, fechaFinal },
+    })
     return data
   },
 }

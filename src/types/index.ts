@@ -219,20 +219,40 @@ export type RegistroAsistenciaInput = Omit<
 // Lo devuelve el MS de RRHH (GET /rrhh/asistencias/verificar). El recorte ya
 // viene aplicado: horaEntrada/horaSalida son las horas "efectivas" (la real si
 // se penaliza, la del turno si no), y horaEntradaReal es la marca cruda.
-export type TipoTurnoVerificacion = 'acabados' | 'produccion'
-
+/**
+ * Un día de asistencia, derivado del MISMO grano que alimenta el cálculo de horas extra
+ * (turnos de las 4 fuentes + biométrico apareado + ausencias registradas + asuetos).
+ * GET /rrhh/asistencias/verificar
+ */
 export interface VerificacionAsistencia {
   idEmpleado: number
   nombre: string
   fecha: string                          // YYYY-MM-DD
-  horaEntradaProgramada: string | null   // HH:mm — HoraInicio del turno
+  horaEntradaProgramada: string | null   // HH:mm — inicio del turno
   horaEntradaReal: string | null         // HH:mm — marca real de entrada (sin recorte)
   horaEntrada: string | null             // HH:mm — efectiva (recortada al turno)
-  horaSalidaProgramada: string | null    // HH:mm — HoraFin del turno
+  horaSalidaProgramada: string | null    // HH:mm — fin del turno
+  horaSalidaReal: string | null          // HH:mm — marca real de salida (sin recorte)
   horaSalida: string | null              // HH:mm — efectiva (recortada al turno)
   llegoTarde: boolean
   salioTemprano: boolean
-  tipo: TipoTurnoVerificacion            // origen del turno
+  faltaMarca: boolean                    // día trabajado sin marca de entrada (o de salida en diurna)
+  marcaSinTurno: boolean                 // marcó un día sin turno programado
+  horarioAutorizado: boolean             // cumplió la meta → el horario programado es el oficial
+  tipoDia: string                        // DIA | NOCHE | DESCANSO | ASUETO-D | ASUETO-N | AUSENTE
+  horasEfectivas: number                 // horas que se le reconocen ese día
+  tipo: FuenteTurno                      // origen del turno
+  ausenciaTipo: number | null            // tTiposAusencia.Id de la ausencia registrada ese día
+  ausenciaNombre: string | null          // nombre del tipo ("Vacaciones", …)
+  ausenciaEfecto: EfectoAusencia | null  // qué se le hizo al horario del día
+}
+
+/** Programado en el rango que no marcó NI UNA vez, sin ausencia que lo explique. */
+export interface AsistenciaNoMarco {
+  idEmpleado: number
+  nombre: string
+  tipo: FuenteTurno | null
+  diasProgramados: number
 }
 
 // Horas extra calculadas por el motor (réplica del Machote) — GET /rrhh/horas-extra/calcular.

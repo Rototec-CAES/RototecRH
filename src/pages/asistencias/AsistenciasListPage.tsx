@@ -1,11 +1,10 @@
 import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { CalendarDays, ChevronRight, Clock, Search, Upload } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { CalendarDays, Eye, UserX } from 'lucide-react'
 
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
+import { EmpleadoCombobox } from '@/components/ui/employee-combobox'
 import {
   Select,
   SelectContent,
@@ -13,98 +12,82 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import { useEmpleadosBackendList } from '@/hooks/useEmpleados'
+import { useNoMarcaron, useVerificacionAsistencias } from '@/hooks/useAsistencias'
+import { quincenaDeHoy, rangoQuincena, type Quincena } from '@/lib/ausencias'
+import { formatDate, nombreEmpleado } from '@/lib/utils'
+import type { EmpleadoBackend } from '@/types'
+import {
+  TipoBadge,
   VerificacionResumen,
   VerificacionTable,
+  tieneNovedad,
 } from '@/components/asistencias/verificacion'
-import { useEmpleadosList } from '@/hooks/useEmpleados'
-import { useAsignacionesTurnoAll, useTurnosList } from '@/hooks/useTurnos'
-import { useAsistenciasPeriodo, useVerificacionAsistencias } from '@/hooks/useAsistencias'
-import { useAusenciasPeriodo } from '@/hooks/useAusencias'
-import {
-  quincenaDeHoy,
-  rangoQuincena,
-  type Quincena,
-} from '@/lib/ausencias'
-import {
-  calcularResumenPeriodo,
-  construirDiasEmpleado,
-} from '@/lib/asistencias'
-import { formatDate, nombreParaMostrar } from '@/lib/utils'
 
 const MESES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
 ]
 
+type Filtro = 'todos' | 'novedades'
+
 export default function AsistenciasListPage() {
-  const navigate = useNavigate()
   const hoy = quincenaDeHoy()
   const [year, setYear] = useState<number>(hoy.year)
   const [monthIndex, setMonthIndex] = useState<number>(hoy.monthIndex)
   const [quincena, setQuincena] = useState<Quincena>(hoy.num)
-  const [tab, setTab] = useState<'resumen' | 'verificacion'>('resumen')
-  const [tipoFiltro, setTipoFiltro] = useState<'TODOS' | 'acabados' | 'produccion'>('TODOS')
-  const [soloNovedades, setSoloNovedades] = useState(false)
-  const [texto, setTexto] = useState('')
+  const [empleadoFiltro, setEmpleadoFiltro] = useState<string>('TODOS')
+  const [filtro, setFiltro] = useState<Filtro>('todos')
 
   const rango = useMemo(
     () => rangoQuincena(year, monthIndex, quincena),
     [year, monthIndex, quincena],
   )
 
-  const { data: empleados, isLoading: loadingEmp } = useEmpleadosList()
-  const { data: turnos } = useTurnosList()
-  const { data: asignaciones } = useAsignacionesTurnoAll()
-  const { data: registros, isLoading: loadingReg } = useAsistenciasPeriodo(
-    rango.desde,
-    rango.hasta,
-  )
-  const { data: ausencias } = useAusenciasPeriodo(rango.desde, rango.hasta)
+  const { data: empleados } = useEmpleadosBackendList()
   const verifQ = useVerificacionAsistencias(rango.desde, rango.hasta)
+  const noMarcaronQ = useNoMarcaron(rango.desde, rango.hasta)
 
-  const empleadosActivos = useMemo(
-    () => (empleados ?? []).filter((e) => e.estado === 'ACTIVO'),
-    [empleados],
-  )
-
-  const resumenes = useMemo(() => {
-    if (!empleados || !turnos || !asignaciones) return new Map<string, ReturnType<typeof calcularResumenPeriodo>>()
-    const m = new Map<string, ReturnType<typeof calcularResumenPeriodo>>()
-    for (const e of empleadosActivos) {
-      const dias = construirDiasEmpleado({
-        empleadoId: e.id,
-        desde: rango.desde,
-        hasta: rango.hasta,
-        turnos: turnos ?? [],
-        asignaciones: asignaciones ?? [],
-        registros: registros ?? [],
-        ausencias: ausencias ?? [],
-      })
-      m.set(e.id, calcularResumenPeriodo(e.id, dias))
-    }
+  // El catálogo de empleados manda sobre el nombre que viene del biométrico.
+  const nombrePorId = useMemo(() => {
+    const m = new Map<number, string>()
+    for (const e of (empleados ?? []) as EmpleadoBackend[]) m.set(e.id, nombreEmpleado(e))
     return m
-  }, [empleados, turnos, asignaciones, registros, ausencias, empleadosActivos, rango.desde, rango.hasta])
+  }, [empleados])
+
+  const filas = useMemo(() => {
+    let r = (verifQ.data ?? []).map((v) => ({ ...v, nombre: nombrePorId.get(v.idEmpleado) ?? v.nombre }))
+    if (empleadoFiltro !== 'TODOS') r = r.filter((v) => String(v.idEmpleado) === empleadoFiltro)
+    if (filtro === 'novedades') r = r.filter(tieneNovedad)
+    return [...r].sort((a, b) => a.fecha.localeCompare(b.fecha) || a.nombre.localeCompare(b.nombre))
+  }, [verifQ.data, nombrePorId, empleadoFiltro, filtro])
+
+  const noMarcaron = useMemo(() => {
+    let r = (noMarcaronQ.data ?? []).map((n) => ({
+      ...n,
+      nombre: nombrePorId.get(n.idEmpleado) ?? n.nombre,
+    }))
+    if (empleadoFiltro !== 'TODOS') r = r.filter((n) => String(n.idEmpleado) === empleadoFiltro)
+    return r
+  }, [noMarcaronQ.data, nombrePorId, empleadoFiltro])
+
+  const empleadosActivos = useMemo(() => {
+    return ((empleados ?? []) as EmpleadoBackend[])
+      .filter((e) => e.estaActivo)
+      .map((e) => ({ id: e.id, nombre: nombreEmpleado(e) }))
+      .sort((a, b) => a.nombre.localeCompare(b.nombre))
+  }, [empleados])
 
   const years = [year - 1, year, year + 1]
-  const cargando = loadingEmp || loadingReg
-
-  const verifBase = useMemo(() => {
-    let r = verifQ.data ?? []
-    if (tipoFiltro !== 'TODOS') r = r.filter((x) => x.tipo === tipoFiltro)
-    const q = texto.trim().toLowerCase()
-    if (q) r = r.filter((x) => x.nombre.toLowerCase().includes(q))
-    return r
-  }, [verifQ.data, tipoFiltro, texto])
-  const verifMostrados = useMemo(
-    () =>
-      soloNovedades
-        ? verifBase.filter((x) => x.llegoTarde || x.salioTemprano)
-        : verifBase,
-    [verifBase, soloNovedades],
-  )
+  const conNovedad = useMemo(() => (verifQ.data ?? []).filter(tieneNovedad).length, [verifQ.data])
 
   return (
     <div className="space-y-4">
@@ -112,206 +95,134 @@ export default function AsistenciasListPage() {
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div className="flex flex-wrap items-end gap-3">
             <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                Año
-              </label>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Año</label>
               <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
-                <SelectTrigger className="w-28">
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {years.map((y) => (
-                    <SelectItem key={y} value={String(y)}>
-                      {y}
-                    </SelectItem>
+                    <SelectItem key={y} value={String(y)}>{y}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                Mes
-              </label>
-              <Select
-                value={String(monthIndex)}
-                onValueChange={(v) => setMonthIndex(Number(v))}
-              >
-                <SelectTrigger className="w-40">
-                  <SelectValue />
-                </SelectTrigger>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Mes</label>
+              <Select value={String(monthIndex)} onValueChange={(v) => setMonthIndex(Number(v))}>
+                <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {MESES.map((m, i) => (
-                    <SelectItem key={m} value={String(i)}>
-                      {m}
-                    </SelectItem>
+                    <SelectItem key={m} value={String(i)}>{m}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                Quincena
-              </label>
-              <Select
-                value={String(quincena)}
-                onValueChange={(v) => setQuincena(Number(v) as Quincena)}
-              >
-                <SelectTrigger className="w-32">
-                  <SelectValue />
-                </SelectTrigger>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Quincena</label>
+              <Select value={String(quincena)} onValueChange={(v) => setQuincena(Number(v) as Quincena)}>
+                <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="1">1ª (1–15)</SelectItem>
                   <SelectItem value="2">2ª (16–fin)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <CalendarDays className="h-4 w-4" />
-              <span className="tabular-nums">
-                {formatDate(rango.desde)} – {formatDate(rango.hasta)}
-              </span>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Empleado</label>
+              <EmpleadoCombobox
+                className="w-72"
+                empleados={empleadosActivos}
+                value={empleadoFiltro === 'TODOS' ? null : Number(empleadoFiltro)}
+                onChange={(id) => setEmpleadoFiltro(id == null ? 'TODOS' : String(id))}
+                allowAll
+                allLabel="Todos"
+              />
             </div>
-            <Button variant="outline" disabled title="En desarrollo">
-              <Upload className="h-4 w-4" />
-              Importar CSV (próximamente)
-            </Button>
+          </div>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <CalendarDays className="h-4 w-4" />
+            <span className="tabular-nums">{formatDate(rango.desde)} – {formatDate(rango.hasta)}</span>
           </div>
         </div>
       </Card>
 
-      <Tabs value={tab} onValueChange={(v) => setTab(v as 'resumen' | 'verificacion')}>
-        <TabsList>
-          <TabsTrigger value="resumen">Resumen</TabsTrigger>
-          <TabsTrigger value="verificacion">Verificación</TabsTrigger>
-        </TabsList>
+      <VerificacionResumen rows={verifQ.data ?? []} />
 
-        <TabsContent value="resumen" className="mt-3">
-          {cargando ? (
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-32 w-full" />
-          ))}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex gap-2">
+          <Button
+            variant={filtro === 'todos' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setFiltro('todos')}
+          >
+            Todos
+          </Button>
+          <Button
+            variant={filtro === 'novedades' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setFiltro('novedades')}
+          >
+            Sólo novedades
+            <span className="ml-2 rounded bg-background/20 px-1.5 text-xs">{conNovedad}</span>
+          </Button>
         </div>
-      ) : empleadosActivos.length === 0 ? (
-        <Card className="p-10 text-center text-muted-foreground">
-          No hay empleados activos.
-        </Card>
-      ) : (
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {empleadosActivos.map((e) => {
-            const r = resumenes.get(e.id)
-            return (
-              <button
-                key={e.id}
-                type="button"
-                onClick={() => navigate(`/asistencias/${e.id}`)}
-                className="text-left"
-              >
-                <Card className="h-full p-4 transition-colors hover:bg-accent/40">
-                  <div className="flex items-start justify-between">
-                    <div className="min-w-0">
-                      <p className="truncate font-semibold">{nombreParaMostrar(e)}</p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {e.puesto} ·{' '}
-                        {e.departamento.replace(/_/g, ' / ').toLowerCase()}
-                      </p>
-                    </div>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                  <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
-                    <Metric label="H. trab." value={r ? r.horasTrabajadas.toFixed(2) : '—'} />
-                    <Metric
-                      label="Extras D"
-                      value={r ? r.horasExtrasDiurnas.toFixed(2) : '—'}
-                      highlight={Boolean(r && r.horasExtrasDiurnas > 0)}
-                    />
-                    <Metric
-                      label="Extras N"
-                      value={r ? r.horasExtrasNocturnas.toFixed(2) : '—'}
-                      highlight={Boolean(r && r.horasExtrasNocturnas > 0)}
-                    />
-                  </div>
-                  {r?.algunaSemanaPorDia && (
-                    <Badge variant="outline" className="mt-2 text-[10px]">
-                      Cálculo diario (mezcla de turnos)
-                    </Badge>
-                  )}
-                </Card>
-              </button>
-            )
-          })}
-        </div>
-          )}
-        </TabsContent>
+        <p className="text-xs text-muted-foreground">
+          Las ausencias registradas mandan sobre el marcaje.{' '}
+          <Link to="/ausencias" className="underline">Registrar una ausencia</Link>
+        </p>
+      </div>
 
-        <TabsContent value="verificacion" className="mt-3 space-y-4">
-          <VerificacionResumen rows={verifBase} />
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={texto}
-                onChange={(e) => setTexto(e.target.value)}
-                placeholder="Buscar empleado"
-                className="w-64 pl-9"
-              />
-            </div>
-            <Select
-              value={tipoFiltro}
-              onValueChange={(v) =>
-                setTipoFiltro(v as 'TODOS' | 'acabados' | 'produccion')
-              }
-            >
-              <SelectTrigger className="w-44">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="TODOS">Todos los tipos</SelectItem>
-                <SelectItem value="acabados">Acabados</SelectItem>
-                <SelectItem value="produccion">Producción</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button
-              variant={soloNovedades ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setSoloNovedades((s) => !s)}
-            >
-              <Clock className="h-4 w-4" />
-              Solo con novedad
-            </Button>
-            <span className="ml-auto text-sm tabular-nums text-muted-foreground">
-              {verifMostrados.length} registros
-            </span>
-          </div>
-          <VerificacionTable rows={verifMostrados} isLoading={verifQ.isLoading} />
-        </TabsContent>
-      </Tabs>
-    </div>
-  )
-}
-
-function Metric({
-  label,
-  value,
-  highlight,
-}: {
-  label: string
-  value: string
-  highlight?: boolean
-}) {
-  return (
-    <div className="rounded-md border bg-muted/30 p-2">
-      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p
-        className={
-          'tabular-nums text-sm font-semibold ' +
-          (highlight ? 'text-emerald-700' : '')
+      <VerificacionTable
+        rows={filas}
+        isLoading={verifQ.isLoading}
+        emptyText={
+          filtro === 'novedades'
+            ? 'Sin novedades en el período'
+            : 'Sin registros de asistencia en el período'
         }
-      >
-        {value}
-      </p>
+      />
+
+      {noMarcaron.length > 0 && (
+        <Card>
+          <div className="flex items-start gap-3 border-b p-4">
+            <div className="rounded-md bg-rose-50 p-2">
+              <UserX className="h-4 w-4 text-rose-600" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold">No marcaron en todo el período</p>
+              <p className="text-xs text-muted-foreground">
+                Tenían turno programado y no registraron ni una marca. No tienen ausencia que lo
+                explique: si corresponde, regístrala para que deje de aparecer aquí.
+              </p>
+            </div>
+          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Empleado</TableHead>
+                <TableHead>Origen</TableHead>
+                <TableHead className="text-right">Días programados</TableHead>
+                <TableHead className="w-24"></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {noMarcaron.map((n) => (
+                <TableRow key={n.idEmpleado}>
+                  <TableCell className="font-medium">{n.nombre}</TableCell>
+                  <TableCell>{n.tipo ? <TipoBadge tipo={n.tipo} /> : '—'}</TableCell>
+                  <TableCell className="text-right tabular-nums">{n.diasProgramados}</TableCell>
+                  <TableCell className="text-right">
+                    <Button variant="ghost" size="sm" asChild>
+                      <Link to={`/asistencias/${n.idEmpleado}`}>
+                        <Eye className="h-4 w-4" />
+                      </Link>
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
+      )}
     </div>
   )
 }
