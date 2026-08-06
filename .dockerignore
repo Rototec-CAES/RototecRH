@@ -1,0 +1,17 @@
+node_modules
+dist
+dist-ssr
+.git
+.gitignore
+.claude
+.superpowers
+*.log
+logs
+.env.local
+.env.*.local
+Dockerfile
+docker-compose.yml
+.dockerignore
+.vscode
+.idea
+.DS_Store

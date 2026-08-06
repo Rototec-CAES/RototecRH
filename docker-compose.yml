@@ -1,0 +1,17 @@
+services:
+  rototec-hr:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # Relativo: el bundle pega a /api/v2 y nginx lo proxya a API_UPSTREAM.
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api/v2}
+        VITE_USE_MOCK: ${VITE_USE_MOCK:-false}
+    image: rototec-hr:latest
+    container_name: rototec-hr
+    ports:
+      - "5176:5176"
+    environment:
+      NGINX_PORT: 5176
+      API_UPSTREAM: ${API_UPSTREAM:-http://138.118.105.246:3001}
+    restart: unless-stopped

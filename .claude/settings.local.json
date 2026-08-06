@@ -33,7 +33,11 @@
       "Bash(NODE_PATH=/home/plemus/WebstormProjects/Microservicios/node_modules node /tmp/claude-1000/-home-plemus-WebstormProjects-RototecRH/51c09417-de3c-4c40-b2f3-172303a2c04a/scratchpad/migrate.cjs)",
       "Bash(NODE_PATH=/home/plemus/WebstormProjects/Microservicios/node_modules node -e ' *)",
       "Bash(NODE_PATH=/home/plemus/WebstormProjects/Microservicios/node_modules node /tmp/claude-1000/-home-plemus-WebstormProjects-RototecRH/51c09417-de3c-4c40-b2f3-172303a2c04a/scratchpad/fix_puestos.cjs)",
-      "Bash(git -C /home/plemus/WebstormProjects/RototecRH checkout -b feat/cap-licencia-estado-fe)"
+      "Bash(git -C /home/plemus/WebstormProjects/RototecRH checkout -b feat/cap-licencia-estado-fe)",
+      "Bash(timeout 590 docker compose build)",
+      "Bash(docker compose *)",
+      "Bash(curl -sS -o /dev/null -w \"raiz:%{http_code}\\\\n\" http://localhost:5176/)",
+      "Bash(curl -sS -o /dev/null -w \"spa-route:%{http_code}\\\\n\" http://localhost:5176/empleados)"
     ]
   }
 }
