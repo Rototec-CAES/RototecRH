@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { capacitacionesApi } from '@/api/capacitaciones'
@@ -14,12 +14,45 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 
 const DURACION_SEG = 20 * 60 // 20 minutos
 
-type Phase = 'confirm' | 'examen' | 'enviado'
+type Phase = 'confirm' | 'examen' | 'video' | 'enviado'
 
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60)
   const s = seconds % 60
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+}
+
+/**
+ * Reproductor que no deja adelantar más allá de lo ya visto (retroceder sí).
+ * `onTerminado` se dispara al llegar al final, que solo es alcanzable viéndolo completo.
+ */
+function VideoSinAdelantar({ src, onTerminado }: { src: string; onTerminado: () => void }) {
+  const maxVisto = useRef(0)
+
+  return (
+    <video
+      src={src}
+      controls
+      playsInline
+      disablePictureInPicture
+      controlsList="nodownload noplaybackrate"
+      preload="metadata"
+      className="aspect-video w-full rounded-md bg-black"
+      onTimeUpdate={(e) => {
+        const v = e.currentTarget
+        if (!v.seeking) maxVisto.current = Math.max(maxVisto.current, v.currentTime)
+      }}
+      onSeeking={(e) => {
+        const v = e.currentTarget
+        // Margen de 1s para no pelear con el redondeo del timeupdate.
+        if (v.currentTime > maxVisto.current + 1) v.currentTime = maxVisto.current
+      }}
+      onRateChange={(e) => {
+        if (e.currentTarget.playbackRate > 1) e.currentTarget.playbackRate = 1
+      }}
+      onEnded={onTerminado}
+    />
+  )
 }
 
 export default function ExamenPublicoPage() {
@@ -29,6 +62,7 @@ export default function ExamenPublicoPage() {
   const [timeLeft, setTimeLeft] = useState(DURACION_SEG)
   const [examenData, setExamenData] = useState<ExamenPublico | null>(null)
   const [resultado, setResultado] = useState<ResultadoExamen | null>(null)
+  const [videoTerminado, setVideoTerminado] = useState(false)
 
   const {
     data,
@@ -100,7 +134,20 @@ export default function ExamenPublicoPage() {
                   </AlertDescription>
                 </Alert>
               )}
-              {examenData && !error && (
+              {examenData && !error && examenData.modo === 'VIDEO' && (
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-xl font-semibold">{examenData.nombre ?? 'Evaluación'}</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Mira el video completo. No se puede adelantar; al terminar podrás marcarlo como completado.
+                    </p>
+                  </div>
+                  <Button onClick={() => { setPhase('video') }}>
+                    Ver video
+                  </Button>
+                </div>
+              )}
+              {examenData && !error && examenData.modo !== 'VIDEO' && (
                 <div className="space-y-4">
                   <div>
                     <p className="text-xl font-semibold">{examenData.nombre ?? 'Evaluación'}</p>
@@ -183,10 +230,41 @@ export default function ExamenPublicoPage() {
           </>
         )}
 
+        {phase === 'video' && examenData?.videoUrl && (
+          <>
+            <CardHeader>
+              <CardTitle>{examenData.nombre ?? 'Evaluación'}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <VideoSinAdelantar src={examenData.videoUrl} onTerminado={() => setVideoTerminado(true)} />
+              <p className="mt-2 text-sm text-muted-foreground">
+                {videoTerminado
+                  ? 'Terminaste el video. Ya puedes marcarlo como completado.'
+                  : 'El botón se habilita cuando termine el video.'}
+              </p>
+              <div className="mt-6 flex justify-end">
+                <Button
+                  onClick={() => mutation.mutate({ videoCompletado: true })}
+                  disabled={!videoTerminado || mutation.isPending}
+                >
+                  {mutation.isPending ? 'Enviando…' : 'Marcar como completado'}
+                </Button>
+              </div>
+              {mutation.isError && (
+                <Alert variant="destructive" className="mt-4">
+                  <AlertDescription>
+                    Error al registrar el video como completado. Intenta de nuevo.
+                  </AlertDescription>
+                </Alert>
+              )}
+            </CardContent>
+          </>
+        )}
+
         {phase === 'enviado' && resultado && (
           <>
             <CardHeader>
-              <CardTitle>Examen enviado</CardTitle>
+              <CardTitle>{examenData?.modo === 'VIDEO' ? 'Video completado' : 'Examen enviado'}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-4 text-center">

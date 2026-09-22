@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Pencil, Plus, Trash2 } from 'lucide-react'
+import { Pencil, Plus, Trash2, Upload, Video } from 'lucide-react'
 import { toast } from '@/components/ui/sonner'
+import { extractApiErrorMessage } from '@/api/client'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -25,6 +26,7 @@ import {
   useDeletePregunta,
   useDeleteRespuesta,
   useEvaluacion,
+  useSubirVideoEvaluacion,
   useUpdateEvaluacion,
 } from '@/hooks/useCapacitaciones'
 import {
@@ -33,7 +35,7 @@ import {
   type PreguntaFormValues,
   type RespuestaFormValues,
 } from '@/lib/validators'
-import type { Pregunta } from '@/types'
+import type { Evaluacion, ModoEvaluacion, Pregunta } from '@/types'
 
 interface Props {
   idModulo: number | undefined
@@ -72,7 +74,7 @@ export function ModuloEvaluacionDialog({ idModulo, open, onOpenChange }: Props) 
         <DialogHeader>
           <DialogTitle>Evaluación del módulo</DialogTitle>
           <DialogDescription>
-            {data?.evaluacion.nombre ?? 'Define preguntas y respuestas para la evaluación.'}
+            {data?.evaluacion.nombre ?? 'Define un examen de preguntas o un video para la evaluación.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -101,16 +103,24 @@ export function ModuloEvaluacionDialog({ idModulo, open, onOpenChange }: Props) 
               nombre={data.evaluacion.nombre ?? ''}
             />
 
-            {idModulo !== undefined && (
-              <NuevaPregunta idModulo={idModulo} idEvaluacion={data.evaluacion.id} />
-            )}
+            <ModoSelector idModulo={idModulo as number} evaluacion={data.evaluacion} />
 
-            {data.preguntas.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Sin preguntas todavía</p>
+            {data.evaluacion.modo === 'VIDEO' ? (
+              <VideoEvaluacion idModulo={idModulo as number} evaluacion={data.evaluacion} />
             ) : (
-              data.preguntas.map((p) => (
-                <PreguntaCard key={p.id} idModulo={idModulo as number} pregunta={p} />
-              ))
+              <>
+                {idModulo !== undefined && (
+                  <NuevaPregunta idModulo={idModulo} idEvaluacion={data.evaluacion.id} />
+                )}
+
+                {data.preguntas.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Sin preguntas todavía</p>
+                ) : (
+                  data.preguntas.map((p) => (
+                    <PreguntaCard key={p.id} idModulo={idModulo as number} pregunta={p} />
+                  ))
+                )}
+              </>
             )}
 
             <DialogFooter>
@@ -163,6 +173,148 @@ function NombreEvaluacion({
         <Pencil className="h-4 w-4" />
         Guardar
       </Button>
+    </div>
+  )
+}
+
+const MODOS: { value: ModoEvaluacion; label: string; descripcion: string }[] = [
+  { value: 'EXAMEN', label: 'Examen', descripcion: 'Preguntas con respuestas; se aprueba con el porcentaje del módulo.' },
+  { value: 'VIDEO', label: 'Video', descripcion: 'El empleado ve el video completo y lo marca como completado.' },
+]
+
+function ModoSelector({ idModulo, evaluacion }: { idModulo: number; evaluacion: Evaluacion }) {
+  const updateMut = useUpdateEvaluacion(idModulo)
+
+  async function onChange(modo: ModoEvaluacion) {
+    if (modo === evaluacion.modo) return
+    try {
+      await updateMut.mutateAsync({ id: evaluacion.id, modo })
+      toast.success(modo === 'VIDEO' ? 'Evaluación en modo video' : 'Evaluación en modo examen')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al cambiar el modo')
+    }
+  }
+
+  return (
+    <div className="rounded-md border bg-muted/40 p-3">
+      <Label className="mb-2 block">Modo de evaluación</Label>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {MODOS.map((m) => (
+          <label
+            key={m.value}
+            className="flex cursor-pointer items-start gap-2 rounded-md border bg-background p-2 text-sm has-[:checked]:border-primary"
+          >
+            <input
+              type="radio"
+              name={`modo-evaluacion-${evaluacion.id}`}
+              value={m.value}
+              checked={evaluacion.modo === m.value}
+              onChange={() => onChange(m.value)}
+              disabled={updateMut.isPending}
+              className="mt-0.5 accent-primary"
+            />
+            <span>
+              <span className="font-medium">{m.label}</span>
+              <span className="block text-xs text-muted-foreground">{m.descripcion}</span>
+            </span>
+          </label>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/** Mismo tope que el multipart de cloudflare-service-layer (629145600 bytes). */
+const MAX_VIDEO_BYTES = 600 * 1024 * 1024
+
+function VideoEvaluacion({ idModulo, evaluacion }: { idModulo: number; evaluacion: Evaluacion }) {
+  const subirMut = useSubirVideoEvaluacion()
+  const updateMut = useUpdateEvaluacion(idModulo)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [progreso, setProgreso] = useState<number | null>(null)
+  const ocupado = progreso !== null || updateMut.isPending
+
+  async function onFile(file: File | undefined) {
+    if (inputRef.current) inputRef.current.value = ''
+    if (!file) return
+    if (!file.type.startsWith('video/')) {
+      toast.error('El archivo debe ser un video')
+      return
+    }
+    if (file.size > MAX_VIDEO_BYTES) {
+      toast.error('El video no puede pesar más de 600 MB')
+      return
+    }
+    setProgreso(0)
+    try {
+      const subido = await subirMut.mutateAsync({ file, onProgress: setProgreso })
+      await updateMut.mutateAsync({ id: evaluacion.id, videoUrl: subido.url, videoKey: subido.key })
+      toast.success('Video cargado')
+    } catch (err) {
+      toast.error(extractApiErrorMessage(err))
+    } finally {
+      setProgreso(null)
+    }
+  }
+
+  async function onQuitar() {
+    if (!window.confirm('¿Quitar el video de esta evaluación?')) return
+    try {
+      await updateMut.mutateAsync({ id: evaluacion.id, videoUrl: null, videoKey: null })
+      toast.success('Video quitado')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al quitar el video')
+    }
+  }
+
+  return (
+    <div className="space-y-3 rounded-md border p-3">
+      <input
+        ref={inputRef}
+        type="file"
+        accept="video/*"
+        className="hidden"
+        onChange={(e) => onFile(e.target.files?.[0])}
+      />
+
+      {evaluacion.videoUrl ? (
+        <video
+          key={evaluacion.videoUrl}
+          src={evaluacion.videoUrl}
+          controls
+          preload="metadata"
+          className="aspect-video w-full rounded-md bg-black"
+        />
+      ) : (
+        <div className="flex aspect-video w-full flex-col items-center justify-center gap-2 rounded-md border border-dashed text-sm text-muted-foreground">
+          <Video className="h-8 w-8" />
+          Sin video todavía. Los empleados no podrán abrir el enlace hasta que cargues uno.
+        </div>
+      )}
+
+      {progreso !== null && (
+        <div>
+          <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+            <div className="h-full bg-primary transition-all" style={{ width: `${progreso}%` }} />
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {progreso < 100 ? `Subiendo… ${progreso}%` : 'Procesando…'}
+          </p>
+        </div>
+      )}
+
+      <div className="flex flex-wrap justify-end gap-2">
+        {evaluacion.videoUrl && (
+          <Button variant="outline" onClick={onQuitar} disabled={ocupado}>
+            <Trash2 className="h-4 w-4" />
+            Quitar video
+          </Button>
+        )}
+        <Button onClick={() => inputRef.current?.click()} disabled={ocupado}>
+          <Upload className="h-4 w-4" />
+          {evaluacion.videoUrl ? 'Reemplazar video' : 'Subir video'}
+        </Button>
+      </div>
     </div>
   )
 }

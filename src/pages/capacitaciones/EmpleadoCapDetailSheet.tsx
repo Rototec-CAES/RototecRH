@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Copy, ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
+import { extractApiErrorMessage } from '@/api/client'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -390,7 +391,8 @@ function DetalleRow({
       setDialogOpen(false)
       toast.success('Examen generado')
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Error')
+      // Mensaje del backend (p.ej. evaluación de video sin video cargado) en vez del genérico de axios.
+      toast.error(extractApiErrorMessage(err))
     }
   }
 

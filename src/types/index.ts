@@ -810,10 +810,16 @@ export interface Pregunta {
   idTema: number | null
   respuestas: Respuesta[]
 }
+/** EXAMEN = preguntas calificadas (default). VIDEO = se aprueba con ver el video completo. */
+export type ModoEvaluacion = 'EXAMEN' | 'VIDEO'
+
 export interface Evaluacion {
   id: number
   idModulo: number
   nombre: string | null
+  modo: ModoEvaluacion
+  videoUrl: string | null
+  videoKey: string | null
 }
 export interface EvaluacionDetalle {
   evaluacion: Evaluacion
@@ -823,6 +829,18 @@ export interface EvaluacionDetalle {
 export interface EvaluacionInput {
   idModulo: number
   nombre?: string
+}
+export interface UpdateEvaluacionInput {
+  nombre?: string
+  modo?: ModoEvaluacion
+  /** null = quitar el video */
+  videoUrl?: string | null
+  videoKey?: string | null
+}
+/** Respuesta de POST /cloudflare/r2 */
+export interface ArchivoSubido {
+  key: string
+  url: string
 }
 export interface PreguntaInput {
   pregunta: string
@@ -890,11 +908,16 @@ export interface ExamenPreguntaPublica {
 export interface ExamenPublico {
   idEvaluacion: number
   nombre: string | null
+  modo: ModoEvaluacion
+  /** Solo en modo VIDEO */
+  videoUrl: string | null
+  /** Vacío en modo VIDEO */
   preguntas: ExamenPreguntaPublica[]
 }
-export interface EnviarRespuestasInput {
-  respuestas: { idPregunta: number; idRespuesta: number | null }[]
-}
+/** Modo EXAMEN envía `respuestas`; modo VIDEO envía `{ videoCompletado: true }`. */
+export type EnviarRespuestasInput =
+  | { respuestas: { idPregunta: number; idRespuesta: number | null }[] }
+  | { videoCompletado: true }
 export interface ResultadoExamen {
   puntaje: number
   aprobado: boolean

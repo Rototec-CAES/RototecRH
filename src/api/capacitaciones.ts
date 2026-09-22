@@ -1,4 +1,5 @@
 import {
+  api as gatewayApi,
   rrhhApi as api,
   rrhhPublicApi as publicApi,
   USE_MOCK,
@@ -6,7 +7,7 @@ import {
 import type {
   Pensum, PensumArbol, PensumInput, ModuloInput, TemaInput,
   PensumModuloArbol, PensumTemaArbol,
-  Evaluacion, EvaluacionDetalle, EvaluacionInput,
+  Evaluacion, EvaluacionDetalle, EvaluacionInput, UpdateEvaluacionInput, ArchivoSubido,
   Pregunta, PreguntaInput, Respuesta, RespuestaInput,
   EmpleadoCapResumen, EmpleadoCapDetalle,
   GenerarExamenInput, GenerarExamenResult,
@@ -41,6 +42,13 @@ function nextId<T extends { id: number }>(rows: T[]): number {
   return rows.reduce((m, r) => Math.max(m, r.id), 0) + 1
 }
 function delay(ms = 120) { return new Promise((r) => setTimeout(r, ms)) }
+
+/** Alias del bucket R2 (cloudflare-service-layer) donde viven los videos de evaluación. */
+const BUCKET_VIDEOS = 'capacitaciones'
+/** Evaluaciones guardadas antes del modo VIDEO no traen modo/video. */
+function normalizarEvaluacion(ev: Partial<Evaluacion> & Pick<Evaluacion, 'id' | 'idModulo' | 'nombre'>): Evaluacion {
+  return { modo: 'EXAMEN', videoUrl: null, videoKey: null, ...ev }
+}
 
 // Mock raw rows
 interface ModuloRow extends ModuloInput { id: number; idPensum: number }
@@ -229,8 +237,9 @@ const mockApi = {
   // -- Evaluación / preguntas / respuestas --
   async getEvaluacion(idModulo: number): Promise<EvaluacionDetalle | null> {
     await delay()
-    const ev = read<Evaluacion>(K.evals).find((e) => e.idModulo === idModulo)
-    if (!ev) return null
+    const raw = read<Evaluacion>(K.evals).find((e) => e.idModulo === idModulo)
+    if (!raw) return null
+    const ev = normalizarEvaluacion(raw)
     const preguntas = read<Pregunta>(K.preguntas).filter((p) => p.idEvaluacion === ev.id)
     const resp = read<Respuesta>(K.respuestas)
     return { evaluacion: ev, preguntas: preguntas.map((p) => ({ ...p, respuestas: resp.filter((r) => r.idPregunta === p.id) })) }
@@ -238,14 +247,20 @@ const mockApi = {
   async createEvaluacion(input: EvaluacionInput): Promise<Evaluacion> {
     await delay()
     const rows = read<Evaluacion>(K.evals)
-    const ev: Evaluacion = { id: nextId(rows), idModulo: input.idModulo, nombre: input.nombre ?? null }
+    const ev: Evaluacion = { id: nextId(rows), idModulo: input.idModulo, nombre: input.nombre ?? null, modo: 'EXAMEN', videoUrl: null, videoKey: null }
     write(K.evals, [...rows, ev]); return ev
   },
-  async updateEvaluacion(id: number, nombre: string | undefined): Promise<Evaluacion> {
+  async updateEvaluacion(id: number, input: UpdateEvaluacionInput): Promise<Evaluacion> {
     await delay()
     const rows = read<Evaluacion>(K.evals); const i = rows.findIndex((e) => e.id === id)
     if (i === -1) throw new Error('Evaluación no encontrada')
-    rows[i] = { ...rows[i], nombre: nombre ?? rows[i].nombre }; write(K.evals, rows); return rows[i]
+    const cambios = Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined))
+    rows[i] = { ...normalizarEvaluacion(rows[i]), ...cambios }; write(K.evals, rows); return rows[i]
+  },
+  /** Mock: no sube nada; usa un blob URL local (válido solo mientras la pestaña que lo creó siga abierta). */
+  async subirVideo(file: File, onProgress?: (pct: number) => void): Promise<ArchivoSubido> {
+    for (const pct of [25, 50, 75, 100]) { await delay(150); onProgress?.(pct) }
+    return { key: `${file.name}-${Date.now().toString(36)}`, url: URL.createObjectURL(file) }
   },
   async deleteEvaluacion(id: number): Promise<{ id: number }> {
     await delay(); write(K.evals, read<Evaluacion>(K.evals).filter((e) => e.id !== id)); return { id }
@@ -437,8 +452,15 @@ const mockApi = {
   // -- Examen público --
   async getExamenPublico(token: string): Promise<ExamenPublico> {
     await delay()
-    void token
-    return { idEvaluacion: 1, nombre: 'Examen de prueba (mock)', preguntas: [
+    // El token mock lleva el idAsignacionDetalle (tok-<id>-…) → resolvemos la evaluación real del módulo.
+    const idDetalle = Number(token.split('-')[1])
+    const detalle = read<AsignacionRow>(K.asignaciones, seedAsignaciones).flatMap((a) => a.detalles).find((d) => d.id === idDetalle)
+    const raw = detalle ? read<Evaluacion>(K.evals).find((e) => e.idModulo === detalle.idModulo) : undefined
+    const ev = raw ? normalizarEvaluacion(raw) : undefined
+    if (ev?.modo === 'VIDEO') {
+      return { idEvaluacion: ev.id, nombre: ev.nombre, modo: 'VIDEO', videoUrl: ev.videoUrl, preguntas: [] }
+    }
+    return { idEvaluacion: 1, nombre: 'Examen de prueba (mock)', modo: 'EXAMEN', videoUrl: null, preguntas: [
       { idPregunta: 1, pregunta: '¿Qué es EPP?', puntos: 50, opciones: [
         { idRespuesta: 1, respuesta: 'Equipo de protección personal' },
         { idRespuesta: 2, respuesta: 'Examen previo de planta' },
@@ -447,6 +469,7 @@ const mockApi = {
   },
   async enviarExamen(token: string, input: EnviarRespuestasInput): Promise<ResultadoExamen> {
     await delay(); void token
+    if ('videoCompletado' in input) return { puntaje: 100, aprobado: true, estado: 'Aprobado' }
     const correctas = input.respuestas.filter((r) => r.idRespuesta === 1).length
     const puntaje = correctas * 50
     const estado: EstadoModulo = puntaje >= 70 ? 'Aprobado' : 'No aprobado'
@@ -468,7 +491,19 @@ const realApi: typeof mockApi = {
   async deleteTema(id) { const { data } = await api.delete<{ id: number }>(`/capacitaciones/pensums/temas/${id}`); return data },
   async getEvaluacion(idModulo) { const { data } = await api.get<EvaluacionDetalle | null>(`/capacitaciones/modulos/${idModulo}/evaluacion`); return data },
   async createEvaluacion(input) { const { data } = await api.post<Evaluacion>('/capacitaciones/evaluaciones', input); return data },
-  async updateEvaluacion(id, nombre) { const { data } = await api.put<Evaluacion>(`/capacitaciones/evaluaciones/${id}`, { nombre }); return data },
+  async updateEvaluacion(id, input) { const { data } = await api.put<Evaluacion>(`/capacitaciones/evaluaciones/${id}`, input); return data },
+  async subirVideo(file, onProgress) {
+    const form = new FormData()
+    form.append('file', file)
+    // El gateway rutea /cloudflare → cloudflare-service-layer, que responde { ok, message, data }.
+    const { data } = await gatewayApi.post<{ data: ArchivoSubido }>('/cloudflare/r2', form, {
+      params: { bucket: BUCKET_VIDEOS },
+      // Sin esto axios serializaría el FormData como JSON (la instancia trae application/json por defecto).
+      headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress: (e) => { if (e.total) onProgress?.(Math.round((e.loaded / e.total) * 100)) },
+    })
+    return data.data
+  },
   async deleteEvaluacion(id) { const { data } = await api.delete<{ id: number }>(`/capacitaciones/evaluaciones/${id}`); return data },
   async createPregunta(idEvaluacion, input) { const { data } = await api.post<Pregunta>(`/capacitaciones/evaluaciones/${idEvaluacion}/preguntas`, input); return data },
   async deletePregunta(id) { const { data } = await api.delete<{ id: number }>(`/capacitaciones/preguntas/${id}`); return data },

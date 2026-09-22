@@ -1,7 +1,7 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { capacitacionesApi as cap } from '@/api/capacitaciones'
 import type {
-  PensumInput, ModuloInput, TemaInput, EvaluacionInput, PreguntaInput, RespuestaInput,
+  PensumInput, ModuloInput, TemaInput, EvaluacionInput, UpdateEvaluacionInput, PreguntaInput, RespuestaInput,
   GenerarExamenInput, ReabrirInput,
 } from '@/types'
 
@@ -68,7 +68,10 @@ export function useCreateEvaluacion(idModulo: number) {
 }
 export function useUpdateEvaluacion(idModulo: number) {
   const qc = useQueryClient()
-  return useMutation({ mutationFn: ({ id, nombre }: { id: number; nombre: string | undefined }) => cap.updateEvaluacion(id, nombre), onSuccess: () => qc.invalidateQueries({ queryKey: QK.evaluacion(idModulo) }) })
+  return useMutation({ mutationFn: ({ id, ...input }: { id: number } & UpdateEvaluacionInput) => cap.updateEvaluacion(id, input), onSuccess: () => qc.invalidateQueries({ queryKey: QK.evaluacion(idModulo) }) })
+}
+export function useSubirVideoEvaluacion() {
+  return useMutation({ mutationFn: ({ file, onProgress }: { file: File; onProgress?: (pct: number) => void }) => cap.subirVideo(file, onProgress) })
 }
 export function useDeleteEvaluacion(idModulo: number) {
   const qc = useQueryClient()
