@@ -5,7 +5,7 @@ server {
     root   /usr/share/nginx/html;
     index  index.html;
 
-    # Proxy al microservicio (equivalente al rewrite de vercel.json).
+    # Proxy al gateway de microservicios.
     # El front pega same-origin a /api/v2/... y evita CORS / Mixed Content.
     location /api/v2/ {
         proxy_pass         ${API_UPSTREAM}/api/v2/;
@@ -15,6 +15,22 @@ server {
         proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header   X-Forwarded-Proto $scheme;
         proxy_read_timeout 120s;
+    }
+
+    # Subida de archivos a R2 (videos de capacitaciones hasta 600 MB).
+    # nginx limita el body a 1 MB por defecto → sin esto los videos dan 413.
+    # Tope alineado con el multipart de cloudflare-service-layer (629145600 bytes).
+    location /api/v2/cloudflare/ {
+        client_max_body_size    650m;
+        proxy_request_buffering off;
+        proxy_pass              ${API_UPSTREAM}/api/v2/cloudflare/;
+        proxy_http_version      1.1;
+        proxy_set_header        Host              $host;
+        proxy_set_header        X-Real-IP         $remote_addr;
+        proxy_set_header        X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header        X-Forwarded-Proto $scheme;
+        proxy_send_timeout      900s;
+        proxy_read_timeout      900s;
     }
 
     # Assets con hash en el nombre: cache agresivo
