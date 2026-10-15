@@ -6,25 +6,17 @@ import type {
   Ausencia,
   AusenciaInput,
   BajaInput,
-  Bonificacion,
-  BonificacionBatchInput,
-  BonificacionInput,
   Empleado,
   EmpleadoInput,
-  LineaInputManual,
-  Planilla,
   RegistroAsistencia,
   RegistroAsistenciaInput,
   Turno,
   TurnoInput,
 } from '@/types'
-import type { ParamsGenerarPlanilla } from '@/lib/planilla'
 import { empleadosApi } from './employees'
 import { asignacionesTurnoApi, turnosApi } from './turnos'
 import { atrasosApi, ausenciasApi } from './ausencias'
 import { asistenciasApi } from './asistencias'
-import { bonificacionesApi } from './bonificaciones'
-import { planillaApi } from './planilla'
 import { authApi, type AuthUser, type LoginInput, type LoginResult } from './auth'
 import { catalogosApi, type Catalogos } from './catalogos'
 import { organizacionApi, type ArbolOrganizacional } from './organizacion'
@@ -112,42 +104,6 @@ export const upsertAsistencia = (
 ): Promise<RegistroAsistencia> => asistenciasApi.upsert(input)
 export const deleteAsistencia = (empleadoId: string, fecha: string): Promise<void> =>
   asistenciasApi.remove(empleadoId, fecha)
-
-// ==================== Bonificaciones ====================
-
-export const getBonificaciones = (): Promise<Bonificacion[]> =>
-  bonificacionesApi.list()
-export const getBonificacionesPorPeriodo = (periodo: string): Promise<Bonificacion[]> =>
-  bonificacionesApi.listByPeriodo(periodo)
-export const getBonificacionesPorEmpleado = (
-  empleadoId: string,
-): Promise<Bonificacion[]> => bonificacionesApi.listByEmpleado(empleadoId)
-export const createBonificacion = (input: BonificacionInput): Promise<Bonificacion> =>
-  bonificacionesApi.create(input)
-export const createBonificacionesBatch = (
-  input: BonificacionBatchInput,
-): Promise<Bonificacion[]> => bonificacionesApi.createBatch(input)
-export const updateBonificacion = (
-  id: string,
-  input: BonificacionInput,
-): Promise<Bonificacion> => bonificacionesApi.update(id, input)
-export const deleteBonificacion = (id: string): Promise<void> =>
-  bonificacionesApi.remove(id)
-
-// ==================== Planilla ====================
-
-export const getPlanillas = (): Promise<Planilla[]> => planillaApi.list()
-export const getPlanillaPorPeriodo = (periodo: string): Promise<Planilla | null> =>
-  planillaApi.getByPeriodo(periodo)
-export const generarPlanilla = (params: ParamsGenerarPlanilla): Promise<Planilla> =>
-  planillaApi.generar(params)
-export const updateLineaPlanilla = (
-  periodo: string,
-  empleadoId: string,
-  parche: Partial<LineaInputManual>,
-): Promise<Planilla> => planillaApi.updateLinea(periodo, empleadoId, parche)
-export const cerrarPlanilla = (periodo: string): Promise<Planilla> =>
-  planillaApi.cerrar(periodo)
 
 // ==================== Auth ====================
 

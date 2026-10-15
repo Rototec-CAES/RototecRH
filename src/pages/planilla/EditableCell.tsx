@@ -5,10 +5,11 @@ interface Props {
   onCommit: (n: number) => void
   disabled?: boolean
   className?: string
+  step?: string
 }
 
 // Input numérico que mantiene estado local mientras se edita y commitea en blur.
-export function EditableCell({ initial, onCommit, disabled, className }: Props) {
+export function EditableCell({ initial, onCommit, disabled, className, step = '0.01' }: Props) {
   const [val, setVal] = useState<string>(String(initial ?? 0))
 
   useEffect(() => {
@@ -25,7 +26,7 @@ export function EditableCell({ initial, onCommit, disabled, className }: Props) 
   return (
     <input
       type="number"
-      step="0.01"
+      step={step}
       min={0}
       value={val}
       onChange={(e) => setVal(e.target.value)}
