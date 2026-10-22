@@ -1,4 +1,3 @@
-import ExcelJS from 'exceljs'
 import { saveAs } from 'file-saver'
 import type { CampoTotal, LineaNomina, PlanillaNomina } from '@/types/nomina'
 
@@ -15,7 +14,8 @@ interface Columna {
   tipo: 'texto' | 'dias' | 'horas' | 'q'
 }
 
-// Mismo orden y letras que "04 Calculo Nomina" (AE queda vacía como separador, igual que el Excel).
+// Mismo orden y letras que "04 Calculo Nomina" (AE queda vacía como separador, igual que el Excel; M y N,
+// horas extra mixtas, ya no existen: las horas extra son diurnas o nocturnas).
 export const COLUMNAS_NOMINA: Columna[] = [
   { letra: 'A', titulo: 'Código', grupo: 'datos', campo: 'codigo', tipo: 'texto' },
   { letra: 'B', titulo: 'Nombre', grupo: 'datos', campo: 'nombre', tipo: 'texto' },
@@ -29,8 +29,6 @@ export const COLUMNAS_NOMINA: Columna[] = [
   { letra: 'J', titulo: 'Monto HE diurnas', grupo: 'ingresos', campo: 'heDiurnaMonto', tipo: 'q' },
   { letra: 'K', titulo: 'Horas extra nocturnas', grupo: 'ingresos', campo: 'heNocturnaHoras', tipo: 'horas' },
   { letra: 'L', titulo: 'Monto HE nocturnas', grupo: 'ingresos', campo: 'heNocturnaMonto', tipo: 'q' },
-  { letra: 'M', titulo: 'Horas extra mixtas', grupo: 'ingresos', campo: 'heMixtaHoras', tipo: 'horas' },
-  { letra: 'N', titulo: 'Monto HE mixtas', grupo: 'ingresos', campo: 'heMixtaMonto', tipo: 'q' },
   { letra: 'O', titulo: 'Pago total horas extra', grupo: 'ingresos', campo: 'heTotal', tipo: 'q' },
   { letra: 'P', titulo: 'Bolsón bonif. máquinas', grupo: 'ingresos', campo: 'bolsonMaquinas', tipo: 'q' },
   { letra: 'Q', titulo: 'Bono rendimiento acabados', grupo: 'ingresos', campo: 'bonoRendimiento', tipo: 'q' },
@@ -77,11 +75,13 @@ function fechaLarga(iso: string): string {
 }
 
 export function tituloQuincena(p: Pick<PlanillaNomina, 'anio' | 'mes' | 'quincena'>): string {
+  if (p.quincena === 0) return `Planilla mensual de ${MESES[p.mes - 1]} ${p.anio}`
   return `${p.quincena === 1 ? '1ra' : '2da'} Quincena de ${MESES[p.mes - 1]} ${p.anio}`
 }
 
 export async function exportarNominaExcel(planilla: PlanillaNomina, empresa: string): Promise<void> {
-  const wb = new ExcelJS.Workbook()
+  const { Workbook } = (await import('exceljs')).default
+  const wb = new Workbook()
   const ws = wb.addWorksheet('04 Calculo Nomina', {
     views: [{ state: 'frozen', xSplit: 3, ySplit: 8 }],
   })
@@ -151,15 +151,18 @@ export async function exportarNominaExcel(planilla: PlanillaNomina, empresa: str
     { header: 'Código', key: 'codigo', width: 12 },
     { header: 'Nombre', key: 'nombre', width: 36 },
     { header: 'Forma de pago', key: 'formaPago', width: 15 },
-    { header: 'Banco', key: 'codigoBanco', width: 10 },
+    { header: 'Código banco', key: 'codigoBanco', width: 13 },
+    { header: 'Banco', key: 'bancoNombre', width: 24 },
     { header: 'Tipo de cuenta', key: 'tipoCuenta', width: 15 },
     { header: 'No. cuenta', key: 'numeroCuenta', width: 20 },
     { header: 'Líquido', key: 'liquido', width: 14, style: { numFmt: '"Q" #,##0.00' } },
   ]
   banco.getRow(1).font = { bold: true }
-  for (const l of planilla.lineas) banco.addRow(l)
+  for (const l of planilla.lineas) {
+    banco.addRow({ ...l, codigoBanco: l.banco?.codigo ?? l.codigoBanco, bancoNombre: l.banco?.nombre ?? 'Sin equivalencia' })
+  }
 
   const buffer = await wb.xlsx.writeBuffer()
-  const nombre = `Planilla_${planilla.anio}-${String(planilla.mes).padStart(2, '0')}-Q${planilla.quincena}.xlsx`
+  const nombre = `Planilla_${planilla.anio}-${String(planilla.mes).padStart(2, '0')}${planilla.quincena === 0 ? '-Mensual' : `-Q${planilla.quincena}`}.xlsx`
   saveAs(new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), nombre)
 }

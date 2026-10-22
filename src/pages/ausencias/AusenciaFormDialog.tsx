@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { Icon } from '@iconify/react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
@@ -182,7 +183,12 @@ export function AusenciaFormDialog({ open, onOpenChange, ausencia }: Props) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{editing ? 'Editar ausencia' : 'Registrar ausencia'}</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-sky-50 text-sky-600">
+              <Icon icon={editing ? 'solar:pen-bold' : 'solar:calendar-add-bold'} width={18} />
+            </span>
+            {editing ? 'Editar ausencia' : 'Registrar ausencia'}
+          </DialogTitle>
           <DialogDescription>
             La medida, séptimo e IGSS se toman de la regla del tipo seleccionado.
           </DialogDescription>
@@ -198,7 +204,7 @@ export function AusenciaFormDialog({ open, onOpenChange, ausencia }: Props) {
               disabled={editing}
             />
             {errors.idEmpleado && (
-              <p className="mt-1 text-xs text-destructive">{errors.idEmpleado.message}</p>
+              <p className="mt-1 text-xs text-red-600">{errors.idEmpleado.message}</p>
             )}
           </div>
 
@@ -207,7 +213,7 @@ export function AusenciaFormDialog({ open, onOpenChange, ausencia }: Props) {
               <Label className="mb-1.5 block">{editing ? 'Fecha *' : 'Del *'}</Label>
               <Input type="date" {...form.register('fechaAusencia')} />
               {errors.fechaAusencia && (
-                <p className="mt-1 text-xs text-destructive">{errors.fechaAusencia.message}</p>
+                <p className="mt-1 text-xs text-red-600">{errors.fechaAusencia.message}</p>
               )}
             </div>
             {!editing && (
@@ -215,9 +221,9 @@ export function AusenciaFormDialog({ open, onOpenChange, ausencia }: Props) {
                 <Label className="mb-1.5 block">Al</Label>
                 <Input type="date" min={desdeSel || undefined} {...form.register('fechaHasta')} />
                 {errors.fechaHasta ? (
-                  <p className="mt-1 text-xs text-destructive">{errors.fechaHasta.message}</p>
+                  <p className="mt-1 text-xs text-red-600">{errors.fechaHasta.message}</p>
                 ) : (
-                  <p className="mt-1 text-xs text-muted-foreground">Opcional — vacío = un solo día</p>
+                  <p className="mt-1 text-xs text-slate-400">Opcional — vacío = un solo día</p>
                 )}
               </div>
             )}
@@ -228,7 +234,9 @@ export function AusenciaFormDialog({ open, onOpenChange, ausencia }: Props) {
           </div>
 
           {resumenRango && (
-            <div className="rounded-md border border-sky-200 bg-sky-50 p-3 text-xs text-sky-900">
+            <div className="flex items-start gap-2 rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs text-sky-900">
+              <Icon icon="solar:info-circle-bold" width={16} className="mt-px shrink-0 text-sky-600" />
+              <span>
               Se {resumenRango.nuevas === 1 ? 'creará' : 'crearán'}{' '}
               <strong className="tabular-nums">{resumenRango.nuevas}</strong>{' '}
               {resumenRango.nuevas === 1 ? 'registro' : 'registros'} (un día cada uno).
@@ -240,6 +248,7 @@ export function AusenciaFormDialog({ open, onOpenChange, ausencia }: Props) {
                   {resumenRango.omitidas === 1 ? 'omitirá' : 'omitirán'}.
                 </>
               )}
+              </span>
             </div>
           )}
 
@@ -261,12 +270,12 @@ export function AusenciaFormDialog({ open, onOpenChange, ausencia }: Props) {
               </SelectContent>
             </Select>
             {errors.tipoAusencia && (
-              <p className="mt-1 text-xs text-destructive">{errors.tipoAusencia.message}</p>
+              <p className="mt-1 text-xs text-red-600">{errors.tipoAusencia.message}</p>
             )}
           </div>
 
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" className="h-4 w-4 rounded border-input" {...form.register('presentoConstancia')} />
+          <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50">
+            <input type="checkbox" className="h-4 w-4 rounded border-slate-300 accent-sky-500" {...form.register('presentoConstancia')} />
             Presentó constancia
             {tipoSel?.requiereConstancia && (
               <span className="text-xs text-amber-700">(recomendada para este tipo)</span>
@@ -279,10 +288,13 @@ export function AusenciaFormDialog({ open, onOpenChange, ausencia }: Props) {
           </div>
 
           {tipoSel && (
-            <div className="space-y-1 rounded-md border bg-muted/40 p-3 text-sm">
-              <p className="font-medium">{tipoSel.nombre}</p>
-              {tipoSel.descripcion && <p className="text-xs text-muted-foreground">{tipoSel.descripcion}</p>}
-              <div className="mt-2 flex flex-wrap gap-3 text-xs">
+            <div className="space-y-1 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+              <p className="flex items-center gap-1.5 font-semibold text-slate-800">
+                <Icon icon="solar:document-text-bold" width={15} className="text-slate-400" />
+                Regla del tipo: {tipoSel.nombre}
+              </p>
+              {tipoSel.descripcion && <p className="text-xs text-slate-500">{tipoSel.descripcion}</p>}
+              <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-600">
                 <span>
                   Días a descontar: <strong className="tabular-nums">{tipoSel.diasDescontar}</strong>
                 </span>
@@ -300,7 +312,8 @@ export function AusenciaFormDialog({ open, onOpenChange, ausencia }: Props) {
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={isPending}>
+            <Button type="submit" disabled={isPending} data-testid="rh-ausencias__btn-guardar">
+              <Icon icon={isPending ? 'svg-spinners:180-ring' : 'solar:check-circle-bold'} width={16} />
               {isPending ? 'Guardando…' : editing ? 'Guardar' : 'Registrar'}
             </Button>
           </DialogFooter>

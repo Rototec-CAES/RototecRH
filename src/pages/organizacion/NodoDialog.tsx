@@ -1,7 +1,7 @@
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { toast } from 'sonner'
+import { Icon } from '@iconify/react'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -15,6 +15,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { extractApiErrorMessage } from '@/api/client'
+import { notify } from '@/lib/notify'
 import {
   useActualizarDepartamento,
   useActualizarPuesto,
@@ -39,6 +40,12 @@ const LABEL: Record<Nivel, string> = {
   departamento: 'departamento',
   subdepartamento: 'sub-departamento',
   puesto: 'puesto',
+}
+
+const ICONO: Record<Nivel, string> = {
+  departamento: 'solar:buildings-2-bold',
+  subdepartamento: 'solar:folder-with-files-bold',
+  puesto: 'solar:case-round-bold',
 }
 
 const MAX_NOMBRE: Record<Nivel, number> = {
@@ -125,10 +132,10 @@ function NodoForm({ state, onDone }: { state: NodoDialogState; onDone: () => voi
         if (mode === 'crear') await crearPuesto.mutateAsync({ nombre, idSubdepartamento: parentId!, codigoBiotime })
         else await actPuesto.mutateAsync({ id: nodo!.id, input: { nombre, codigoBiotime } })
       }
-      toast.success(mode === 'crear' ? `Se creó el ${label}` : `Se guardó el ${label}`)
+      notify('success', mode === 'crear' ? `Se creó el ${label}` : `Se guardó el ${label}`)
       onDone()
     } catch (err) {
-      toast.error(extractApiErrorMessage(err))
+      notify('error', 'No se pudo guardar', extractApiErrorMessage(err))
     }
   }
 
@@ -137,12 +144,15 @@ function NodoForm({ state, onDone }: { state: NodoDialogState; onDone: () => voi
   return (
     <>
       <DialogHeader>
-        <DialogTitle className="capitalize">
-          {mode === 'crear' ? `Nuevo ${label}` : `Editar ${label}`}
+        <DialogTitle className="flex items-center gap-2">
+          <span className="grid h-8 w-8 place-items-center rounded-xl bg-slate-900 text-white">
+            <Icon icon={ICONO[nivel]} width={16} />
+          </span>
+          <span className="first-letter:uppercase">{mode === 'crear' ? `Nuevo ${label}` : `Editar ${label}`}</span>
         </DialogTitle>
         <DialogDescription>
           {nivel === 'puesto'
-            ? 'El código Biotime es opcional y enlaza el puesto con el reloj.'
+            ? 'El código del reloj (Biotime) es opcional y enlaza el puesto con el reloj biométrico.'
             : nivel === 'departamento'
               ? 'Nombre corto (máx. 25) y un código opcional.'
               : 'Nombre del sub-departamento.'}
@@ -151,25 +161,25 @@ function NodoForm({ state, onDone }: { state: NodoDialogState; onDone: () => voi
 
       <form className="space-y-4" onSubmit={form.handleSubmit(onSubmit)}>
         <div>
-          <Label className="mb-1.5 block">Nombre *</Label>
+          <Label className="mb-1.5 block text-xs font-semibold text-slate-600">Nombre <span className="text-rose-500">*</span></Label>
           <Input autoFocus maxLength={MAX_NOMBRE[nivel]} {...form.register('nombre')} />
-          {errors.nombre && <p className="mt-1 text-xs text-destructive">{errors.nombre.message}</p>}
+          {errors.nombre && <p className="mt-1 text-xs text-red-600">{errors.nombre.message}</p>}
         </div>
 
         {nivel === 'departamento' && (
           <div>
-            <Label className="mb-1.5 block">Código</Label>
+            <Label className="mb-1.5 block text-xs font-semibold text-slate-600">Código</Label>
             <Input maxLength={20} placeholder="Opcional" {...form.register('codigo')} />
-            {errors.codigo && <p className="mt-1 text-xs text-destructive">{errors.codigo.message}</p>}
+            {errors.codigo && <p className="mt-1 text-xs text-red-600">{errors.codigo.message}</p>}
           </div>
         )}
 
         {nivel === 'puesto' && (
           <div>
-            <Label className="mb-1.5 block">Código Biotime</Label>
+            <Label className="mb-1.5 block text-xs font-semibold text-slate-600">Código del reloj (Biotime)</Label>
             <Input inputMode="numeric" placeholder="Opcional" {...form.register('codigoBiotime')} />
             {errors.codigoBiotime && (
-              <p className="mt-1 text-xs text-destructive">{errors.codigoBiotime.message}</p>
+              <p className="mt-1 text-xs text-red-600">{errors.codigoBiotime.message}</p>
             )}
           </div>
         )}
@@ -178,7 +188,8 @@ function NodoForm({ state, onDone }: { state: NodoDialogState; onDone: () => voi
           <Button type="button" variant="outline" onClick={onDone}>
             Cancelar
           </Button>
-          <Button type="submit" disabled={pending}>
+          <Button type="submit" disabled={pending} data-testid="rh-organizacion__btn-guardar-nodo">
+            <Icon icon={pending ? 'svg-spinners:180-ring' : 'solar:check-circle-bold'} width={16} />
             {pending ? 'Guardando…' : mode === 'crear' ? 'Crear' : 'Guardar'}
           </Button>
         </DialogFooter>

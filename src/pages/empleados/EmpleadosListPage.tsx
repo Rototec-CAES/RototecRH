@@ -1,11 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, Download, Plus, Search } from 'lucide-react'
-import * as XLSX from 'xlsx'
+import { Icon } from '@iconify/react'
 
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import {
   Select,
   SelectContent,
@@ -13,15 +10,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { PageHeader } from '@/components/shared/PageHeader'
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import { Skeleton } from '@/components/ui/skeleton'
+  DataTable,
+  DataTableBody,
+  DataTableCell,
+  DataTableEmpty,
+  DataTableHead,
+  DataTableHeadCell,
+  DataTableRow,
+  DataTableSkeleton,
+} from '@/components/shared/DataTable'
+import { Pagination } from '@/components/shared/Pagination'
+import { TableResultCount, TableSearch } from '@/components/shared/TableToolbar'
+import { FieldLabel, FilterCard, FilterRow } from '@/shared/report/report-ui'
+import { descargarExcel as exportarExcel } from '@/shared/report/report-excel'
+import { stamp } from '@/shared/report/report-utils'
+import { notify } from '@/lib/notify'
 import { formatDate, formatQ, nombreParaMostrar } from '@/lib/utils'
 import { useEmpleadosBackendList } from '@/hooks/useEmpleados'
 import { useEmpresas } from '@/hooks/useCompanyCatalogos'
@@ -31,6 +36,7 @@ import type { EmpleadoBackend } from '@/types'
 
 type EstadoFilter = 'TODOS' | 'ACTIVO' | 'BAJA'
 const PAGE_SIZE = 20
+const TID = 'rh-empleados'
 
 /** Limpia una parte de nombre: null/undefined/'' y los literales 'null'/'undefined' → ''. */
 const limpioNombre = (v: string | null | undefined): string => {
@@ -38,7 +44,10 @@ const limpioNombre = (v: string | null | undefined): string => {
   return /^(null|undefined)$/i.test(s) ? '' : s
 }
 
+/** Nombre para mostrar: tEmpleados.nombre + tEmpleados.apellido (las partes solo si ambos vienen vacíos). */
 function displayName(e: EmpleadoBackend): string {
+  const nombreApellido = [limpioNombre(e.nombre), limpioNombre(e.apellido)].filter(Boolean).join(' ')
+  if (nombreApellido) return nombreApellido
   return nombreParaMostrar({
     primerNombre: limpioNombre(e.primerNombre) || limpioNombre(e.nombre),
     segundoNombre: limpioNombre(e.segundoNombre) || undefined,
@@ -58,6 +67,7 @@ export default function EmpleadosListPage() {
   const [filtroEstado, setFiltroEstado] = useState<EstadoFilter>('TODOS')
   const [filtroPuesto, setFiltroPuesto] = useState('TODOS')
   const [page, setPage] = useState(1)
+  const [exportando, setExportando] = useState(false)
 
   const empresaNombre = (id: number | null) =>
     empresas.data?.find((x) => x.id === id)?.nombre ?? (id != null ? String(id) : '—')
@@ -95,67 +105,96 @@ export default function EmpleadosListPage() {
     setPage(1)
   }
 
-  function descargarExcel() {
-    const rows = filtered.map((e) => ({
-      ID: e.id,
-      'Nombre completo': displayName(e),
-      DPI: e.numeroIdentificacionNacional ?? '',
-      Empresa: empresaNombre(e.empresaId),
-      Puesto: puestoNombre(e.idPuesto),
-      'Salario base': e.salarioBaseContrato ?? '',
-      'Fecha contratación': formatDate(e.fechaContratacion),
-      Estado: e.estaActivo ? 'Activo' : 'Baja',
-    }))
-    const ws = XLSX.utils.json_to_sheet(rows)
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Empleados')
-    const estadoTxt =
-      filtroEstado === 'ACTIVO' ? 'Activos' : filtroEstado === 'BAJA' ? 'Bajas' : 'Todos'
-    const puestoTxt =
-      filtroPuesto !== 'TODOS' ? `_${puestoNombre(Number(filtroPuesto)).replace(/\s+/g, '-')}` : ''
-    XLSX.writeFile(wb, `Empleados_${estadoTxt}${puestoTxt}.xlsx`)
+  async function descargarExcel() {
+    setExportando(true)
+    try {
+      const filas = filtered.map((e) => ({
+        id: e.id,
+        nombre: displayName(e),
+        dpi: e.numeroIdentificacionNacional ?? '',
+        empresa: empresaNombre(e.empresaId),
+        puesto: puestoNombre(e.idPuesto),
+        salario: e.salarioBaseContrato ?? '',
+        contratacion: formatDate(e.fechaContratacion),
+        estado: e.estaActivo ? 'Activo' : 'Baja',
+      }))
+      const estadoTxt =
+        filtroEstado === 'ACTIVO' ? 'activos' : filtroEstado === 'BAJA' ? 'bajas' : 'todos'
+      const puestoTxt =
+        filtroPuesto !== 'TODOS'
+          ? `-${puestoNombre(Number(filtroPuesto)).toLowerCase().replace(/\s+/g, '-')}`
+          : ''
+      await exportarExcel(`empleados-${estadoTxt}${puestoTxt}-${stamp()}.xlsx`, [
+        {
+          nombre: 'Empleados',
+          columnas: [
+            { header: 'ID', key: 'id', width: 8 },
+            { header: 'Nombre completo', key: 'nombre', width: 40 },
+            { header: 'DPI', key: 'dpi', width: 18 },
+            { header: 'Empresa', key: 'empresa', width: 28 },
+            { header: 'Puesto', key: 'puesto', width: 28 },
+            { header: 'Salario base', key: 'salario', width: 16 },
+            { header: 'Fecha contratación', key: 'contratacion', width: 18 },
+            { header: 'Estado', key: 'estado', width: 10 },
+          ],
+          filas,
+          ajustar: (ws) => {
+            ws.getColumn('salario').numFmt = '"Q" #,##0.00'
+          },
+        },
+      ])
+    } catch (err) {
+      notify('error', 'No se pudo generar el Excel', err instanceof Error ? err.message : undefined)
+    } finally {
+      setExportando(false)
+    }
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-muted-foreground">
-          {filtered.length} empleado{filtered.length === 1 ? '' : 's'} en la vista actual
-        </p>
-        <div className="flex items-center gap-2">
+    <div className="space-y-5">
+      <FilterCard>
+        <PageHeader
+          titulo="Empleados"
+          icono="solar:users-group-rounded-bold"
+          descripcion="Listado del personal. Haz clic en una fila para ver la ficha completa del empleado."
+        >
+          <Button
+            className="bg-emerald-600 text-white hover:bg-emerald-700"
+            onClick={descargarExcel}
+            disabled={isLoading || exportando || filtered.length === 0}
+            data-testid={`${TID}__btn-excel`}
+          >
+            <Icon icon={exportando ? 'svg-spinners:180-ring' : 'solar:file-download-linear'} />
+            Excel
+          </Button>
           <Button
             variant="outline"
-            onClick={descargarExcel}
-            disabled={isLoading || filtered.length === 0}
+            onClick={() => navigate('/empleados/actualizacion-masiva')}
+            data-testid={`${TID}__btn-masiva`}
           >
-            <Download className="h-4 w-4" />
-            Descargar Excel
+            <Icon icon="solar:document-add-linear" />
+            Actualización masiva
           </Button>
-          <Button onClick={() => navigate('/empleados/nuevo')}>
-            <Plus className="h-4 w-4" />
-            Nuevo Empleado
+          <Button onClick={() => navigate('/empleados/nuevo')} data-testid={`${TID}__btn-nuevo`}>
+            <Icon icon="solar:user-plus-bold" />
+            Nuevo empleado
           </Button>
-        </div>
-      </div>
+        </PageHeader>
 
-      <Card className="p-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-          <div className="flex-1">
-            <label className="text-xs font-medium text-muted-foreground">Buscar</label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={filtroTexto}
-                onChange={(e) => onChangeFiltro(e.target.value)}
-                placeholder="Nombre o DPI"
-                className="pl-9"
-              />
-            </div>
+        <FilterRow>
+          <div className="w-full sm:w-80">
+            <FieldLabel>Buscar</FieldLabel>
+            <TableSearch
+              value={filtroTexto}
+              onChange={onChangeFiltro}
+              placeholder="Nombre o DPI"
+              testId={`${TID}__filtro-busqueda`}
+            />
           </div>
-          <div className="w-full sm:w-56">
-            <label className="text-xs font-medium text-muted-foreground">Estado</label>
+          <div className="w-full sm:w-48">
+            <FieldLabel>Estado</FieldLabel>
             <Select value={filtroEstado} onValueChange={onChangeEstado}>
-              <SelectTrigger>
+              <SelectTrigger className="rounded-xl" data-testid={`${TID}__filtro-estado`}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -165,10 +204,10 @@ export default function EmpleadosListPage() {
               </SelectContent>
             </Select>
           </div>
-          <div className="w-full sm:w-56">
-            <label className="text-xs font-medium text-muted-foreground">Puesto</label>
+          <div className="w-full sm:w-64">
+            <FieldLabel>Puesto</FieldLabel>
             <Select value={filtroPuesto} onValueChange={onChangePuesto}>
-              <SelectTrigger>
+              <SelectTrigger className="rounded-xl" data-testid={`${TID}__filtro-puesto`}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -181,112 +220,91 @@ export default function EmpleadosListPage() {
               </SelectContent>
             </Select>
           </div>
-        </div>
-      </Card>
-
-      <Card>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-16">ID</TableHead>
-              <TableHead>Nombre completo</TableHead>
-              <TableHead>DPI</TableHead>
-              <TableHead>Empresa</TableHead>
-              <TableHead>Puesto</TableHead>
-              <TableHead className="text-right">Salario base</TableHead>
-              <TableHead>Fecha contratación</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead className="w-20 text-right">Acciones</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              Array.from({ length: 5 }).map((_, i) => (
-                <TableRow key={i}>
-                  <TableCell colSpan={9}>
-                    <Skeleton className="h-6 w-full" />
-                  </TableCell>
-                </TableRow>
-              ))
-            ) : isError ? (
-              <TableRow>
-                <TableCell colSpan={9} className="text-center text-destructive">
-                  Error al cargar empleados
-                </TableCell>
-              </TableRow>
-            ) : pageItems.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
-                  Sin resultados
-                </TableCell>
-              </TableRow>
-            ) : (
-              pageItems.map((e) => (
-                <TableRow
-                  key={e.id}
-                  className="cursor-pointer"
-                  onClick={() => navigate(`/empleados/${e.id}`)}
-                >
-                  <TableCell className="font-mono text-xs text-muted-foreground">{e.id}</TableCell>
-                  <TableCell className="font-medium">{displayName(e)}</TableCell>
-                  <TableCell className="font-mono text-xs">
-                    {e.numeroIdentificacionNacional ?? '—'}
-                  </TableCell>
-                  <TableCell>{empresaNombre(e.empresaId)}</TableCell>
-                  <TableCell>{puestoNombre(e.idPuesto)}</TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {e.salarioBaseContrato != null ? formatQ(e.salarioBaseContrato) : '—'}
-                  </TableCell>
-                  <TableCell>{formatDate(e.fechaContratacion)}</TableCell>
-                  <TableCell>
-                    <EmpleadoStatusBadge estado={e.estaActivo ? 'ACTIVO' : 'BAJA'} />
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(ev) => {
-                        ev.stopPropagation()
-                        navigate(`/empleados/${e.id}`)
-                      }}
-                    >
-                      Ver
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between border-t px-4 py-3">
-            <p className="text-xs text-muted-foreground">
-              Página {safePage} de {totalPages}
-            </p>
-            <div className="flex gap-1">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={safePage === 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-              >
-                <ChevronLeft className="h-4 w-4" />
-                Anterior
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={safePage === totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              >
-                Siguiente
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
+          <div className="ml-auto self-center">
+            <TableResultCount
+              total={data?.length ?? 0}
+              filtered={filtered.length}
+              label="empleado"
+            />
           </div>
-        )}
-      </Card>
+        </FilterRow>
+      </FilterCard>
+
+      <DataTable
+        minWidth="960px"
+        footer={
+          !isLoading && !isError && filtered.length > PAGE_SIZE ? (
+            <Pagination page={safePage} pageSize={PAGE_SIZE} total={filtered.length} onPageChange={setPage} />
+          ) : undefined
+        }
+      >
+        <DataTableHead>
+          <DataTableHeadCell className="w-16">ID</DataTableHeadCell>
+          <DataTableHeadCell>Nombre completo</DataTableHeadCell>
+          <DataTableHeadCell>DPI</DataTableHeadCell>
+          <DataTableHeadCell>Empresa</DataTableHeadCell>
+          <DataTableHeadCell>Puesto</DataTableHeadCell>
+          <DataTableHeadCell className="text-right">Salario base</DataTableHeadCell>
+          <DataTableHeadCell>Contratación</DataTableHeadCell>
+          <DataTableHeadCell>Estado</DataTableHeadCell>
+          <DataTableHeadCell className="w-20 text-right">
+            <span className="sr-only">Acciones</span>
+          </DataTableHeadCell>
+        </DataTableHead>
+        <DataTableBody>
+          {isLoading ? (
+            <DataTableSkeleton rows={6} cols={9} />
+          ) : isError ? (
+            <DataTableEmpty
+              colSpan={9}
+              icon="solar:danger-triangle-bold"
+              title="No se pudieron cargar los empleados"
+              description="Revisa la conexión e intenta recargar la página."
+            />
+          ) : pageItems.length === 0 ? (
+            <DataTableEmpty
+              colSpan={9}
+              icon="solar:users-group-rounded-linear"
+              title="Ningún empleado coincide con los filtros"
+              description="Prueba con otro nombre o DPI, o cambia el estado o el puesto."
+            />
+          ) : (
+            pageItems.map((e) => (
+              <DataTableRow key={e.id} onClick={() => navigate(`/empleados/${e.id}`)}>
+                <DataTableCell className="font-mono text-xs text-slate-400">{e.id}</DataTableCell>
+                <DataTableCell className="font-medium text-slate-900">{displayName(e)}</DataTableCell>
+                <DataTableCell className="font-mono text-xs text-slate-600">
+                  {e.numeroIdentificacionNacional ?? '—'}
+                </DataTableCell>
+                <DataTableCell className="text-slate-600">{empresaNombre(e.empresaId)}</DataTableCell>
+                <DataTableCell className="text-slate-600">{puestoNombre(e.idPuesto)}</DataTableCell>
+                <DataTableCell className="text-right tabular-nums text-slate-700">
+                  {e.salarioBaseContrato != null ? formatQ(e.salarioBaseContrato) : '—'}
+                </DataTableCell>
+                <DataTableCell className="tabular-nums text-slate-600">
+                  {formatDate(e.fechaContratacion)}
+                </DataTableCell>
+                <DataTableCell>
+                  <EmpleadoStatusBadge estado={e.estaActivo ? 'ACTIVO' : 'BAJA'} />
+                </DataTableCell>
+                <DataTableCell className="text-right">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={(ev) => {
+                      ev.stopPropagation()
+                      navigate(`/empleados/${e.id}`)
+                    }}
+                  >
+                    <Icon icon="solar:eye-linear" />
+                    Ver
+                  </Button>
+                </DataTableCell>
+              </DataTableRow>
+            ))
+          )}
+        </DataTableBody>
+      </DataTable>
     </div>
   )
 }

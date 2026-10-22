@@ -1,12 +1,8 @@
 import { useMemo, useState } from 'react'
-import { RefreshCw, Search, Users } from 'lucide-react'
-import { toast } from '@/components/ui/sonner'
+import { Icon } from '@iconify/react'
 
-import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import {
   Select,
   SelectContent,
@@ -14,15 +10,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Skeleton } from '@/components/ui/skeleton'
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
+  DataTable,
+  DataTableBody,
+  DataTableCell,
+  DataTableEmpty,
+  DataTableHead,
+  DataTableHeadCell,
+  DataTableRow,
+  DataTableSkeleton,
+} from '@/components/shared/DataTable'
+import { TableResultCount, TableSearch } from '@/components/shared/TableToolbar'
+import { FieldLabel } from '@/shared/report/report-ui'
 import {
   useAsignarPrimaria,
   useAsignarSecundaria,
@@ -32,6 +31,7 @@ import {
 import { usePuestoOptions, useDepartamentoOptions } from '@/hooks/usePuestoOptions'
 import { NameCombobox } from '@/components/ui/name-combobox'
 import { asignacionSecundariaSchema } from '@/lib/validators'
+import { notify } from '@/lib/notify'
 import type { EmpleadoCapElegible } from '@/types'
 import {
   Dialog,
@@ -42,6 +42,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
+
+const TID = 'rh-capacitaciones'
 
 const norm = (s: string) =>
   s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
@@ -98,10 +100,10 @@ export default function AsignarTab() {
     if (selected.size === 0) return
     try {
       await asignar.mutateAsync([...selected])
-      toast.success(`Asignación creada para ${selected.size} empleado(s)`)
+      notify('success', `Asignación creada para ${selected.size} empleado(s)`)
       setSelected(new Set())
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Error al asignar')
+      notify('error', 'No se pudo asignar', err instanceof Error ? err.message : 'Error al asignar')
     }
   }
 
@@ -127,130 +129,140 @@ export default function AsignarTab() {
 
   return (
     <div className="space-y-4">
-      {/* Filter row */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:flex-wrap">
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-muted-foreground">Puesto</label>
-          <NameCombobox
-            options={puestoOptions}
-            value={puestoId}
-            onChange={(v) => { setPuestoId(v); resetFilters() }}
-            placeholder="Todos los puestos"
-            allowAll
-            allLabel="Todos los puestos"
-            className="sm:w-52"
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-muted-foreground">Departamento</label>
-          <NameCombobox
-            options={deptoOptions}
-            value={departamentoId}
-            onChange={(v) => { setDepartamentoId(v); resetFilters() }}
-            placeholder="Todos los departamentos"
-            allowAll
-            allLabel="Todos los departamentos"
-            className="sm:w-56"
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-muted-foreground">Buscar empleado</label>
-          <div className="relative sm:w-56">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); resetFilters() }}
-              placeholder="Nombre del empleado"
-              className="pl-8"
+      {/* Filtros */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+          <div>
+            <FieldLabel>Puesto</FieldLabel>
+            <NameCombobox
+              options={puestoOptions}
+              value={puestoId}
+              onChange={(v) => { setPuestoId(v); resetFilters() }}
+              placeholder="Todos los puestos"
+              allowAll
+              allLabel="Todos los puestos"
+              className="sm:w-52"
             />
           </div>
-        </div>
-        <div className="ml-auto flex items-center gap-2 sm:mt-5">
-          <button
-            type="button"
-            onClick={() => refetch()}
-            aria-label="Actualizar"
-            title="Actualizar"
-            disabled={isFetching}
-            className="inline-flex items-center justify-center h-8 w-8 rounded-md border border-input bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
-          >
-            <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
-          </button>
-          {selected.size > 0 && (
-            <Badge variant="secondary">{selected.size} seleccionado(s)</Badge>
-          )}
-          <Button
-            size="sm"
-            onClick={onAsignarPrimaria}
-            disabled={selected.size === 0 || asignar.isPending}
-          >
-            <Users className="mr-2 h-4 w-4" />
-            {asignar.isPending ? 'Asignando…' : 'Asignar (primaria)'}
-          </Button>
+          <div>
+            <FieldLabel>Departamento</FieldLabel>
+            <NameCombobox
+              options={deptoOptions}
+              value={departamentoId}
+              onChange={(v) => { setDepartamentoId(v); resetFilters() }}
+              placeholder="Todos los departamentos"
+              allowAll
+              allLabel="Todos los departamentos"
+              className="sm:w-56"
+            />
+          </div>
+          <div>
+            <FieldLabel>Buscar empleado</FieldLabel>
+            <TableSearch
+              value={search}
+              onChange={(v) => { setSearch(v); resetFilters() }}
+              placeholder="Nombre del empleado"
+              className="sm:w-60"
+              testId={`${TID}__filtro-busqueda-asignar`}
+            />
+          </div>
+          <div className="flex items-center gap-2 sm:ml-auto">
+            <TableResultCount total={(data ?? []).length} filtered={elegibles.length} label="empleado" />
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => refetch()}
+              aria-label="Actualizar"
+              title="Actualizar"
+              disabled={isFetching}
+            >
+              <Icon icon={isFetching ? 'svg-spinners:180-ring' : 'solar:refresh-bold'} width={16} />
+            </Button>
+          </div>
         </div>
       </div>
 
-      {/* Table */}
-      <Card>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-10">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 cursor-pointer rounded border-border accent-primary"
-                  checked={allSelected}
-                  ref={(el) => {
-                    if (el) el.indeterminate = someSelected
-                  }}
-                  onChange={toggleAll}
-                  aria-label="Seleccionar todos"
-                  disabled={elegibles.length === 0}
-                />
-              </TableHead>
-              <TableHead>Nombre</TableHead>
-              <TableHead>Puesto</TableHead>
-              <TableHead>Capacitación</TableHead>
-              <TableHead />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              Array.from({ length: 4 }).map((_, i) => (
-                <TableRow key={i}>
-                  <TableCell colSpan={5}>
-                    <Skeleton className="h-6 w-full" />
-                  </TableCell>
-                </TableRow>
-              ))
-            ) : isError ? (
-              <TableRow>
-                <TableCell colSpan={5} className="text-center text-destructive">
-                  Error al cargar empleados elegibles
-                </TableCell>
-              </TableRow>
-            ) : elegibles.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
-                  No hay empleados elegibles
-                </TableCell>
-              </TableRow>
-            ) : (
-              elegibles.map((e) => (
-                <ElegibleRow
-                  key={e.empleadoId}
-                  emp={e}
-                  checked={selected.has(e.empleadoId)}
-                  onToggle={() => toggle(e.empleadoId)}
-                  onSecundaria={() => setSecundariaFor(e)}
-                  puestoNombre={e.puestoNombre ?? puestoMap.get(e.idPuesto) ?? '—'}
-                  pensumNombre={e.pensumNombre ?? pensumMap.get(e.idPensum) ?? '—'}
-                />
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </Card>
+      {/* Barra de selección */}
+      <div
+        className={
+          selected.size > 0
+            ? 'flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3'
+            : 'flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-3'
+        }
+      >
+        <p className="flex items-center gap-2 text-sm text-slate-600">
+          <Icon icon="solar:checklist-minimalistic-bold" width={18} className={selected.size > 0 ? 'text-sky-600' : 'text-slate-400'} />
+          {selected.size > 0 ? (
+            <span>
+              <strong className="text-sky-700">{selected.size}</strong> empleado(s) seleccionado(s). Se les asignará el pensum de su puesto.
+            </span>
+          ) : (
+            'Marca los empleados a los que quieres asignar la capacitación de su puesto.'
+          )}
+        </p>
+        <Button
+          onClick={onAsignarPrimaria}
+          disabled={selected.size === 0 || asignar.isPending}
+          data-testid={`${TID}__btn-asignar-primaria`}
+        >
+          <Icon icon={asignar.isPending ? 'svg-spinners:180-ring' : 'solar:user-plus-bold'} width={16} />
+          {asignar.isPending ? 'Asignando…' : 'Asignar (primaria)'}
+        </Button>
+      </div>
+
+      {/* Tabla */}
+      <DataTable minWidth="680px">
+        <DataTableHead>
+          <DataTableHeadCell className="w-12">
+            <input
+              type="checkbox"
+              className="h-4 w-4 cursor-pointer rounded border-slate-300 accent-sky-500"
+              checked={allSelected}
+              ref={(el) => {
+                if (el) el.indeterminate = someSelected
+              }}
+              onChange={toggleAll}
+              aria-label="Seleccionar todos"
+              disabled={elegibles.length === 0}
+            />
+          </DataTableHeadCell>
+          <DataTableHeadCell>Nombre</DataTableHeadCell>
+          <DataTableHeadCell>Puesto</DataTableHeadCell>
+          <DataTableHeadCell>Capacitación</DataTableHeadCell>
+          <DataTableHeadCell />
+        </DataTableHead>
+        <DataTableBody>
+          {isLoading ? (
+            <DataTableSkeleton rows={4} cols={5} />
+          ) : isError ? (
+            <DataTableEmpty
+              icon="solar:danger-triangle-bold"
+              title="No se pudieron cargar los empleados elegibles"
+              description="Revisa la conexión y presiona el botón Actualizar."
+              colSpan={5}
+            />
+          ) : elegibles.length === 0 ? (
+            <DataTableEmpty
+              icon="solar:users-group-rounded-bold"
+              title="No hay empleados elegibles"
+              description="Cambia los filtros de puesto o departamento."
+              colSpan={5}
+            />
+          ) : (
+            elegibles.map((e) => (
+              <ElegibleRow
+                key={e.empleadoId}
+                emp={e}
+                checked={selected.has(e.empleadoId)}
+                onToggle={() => toggle(e.empleadoId)}
+                onSecundaria={() => setSecundariaFor(e)}
+                puestoNombre={e.puestoNombre ?? puestoMap.get(e.idPuesto) ?? '—'}
+                pensumNombre={e.pensumNombre ?? pensumMap.get(e.idPensum) ?? '—'}
+              />
+            ))
+          )}
+        </DataTableBody>
+      </DataTable>
 
       {/* Secundaria dialog */}
       {secundariaFor && (
@@ -280,33 +292,32 @@ function ElegibleRow({
   pensumNombre: string
 }) {
   return (
-    <TableRow
-      className="cursor-pointer"
-      onClick={onToggle}
-    >
-      <TableCell onClick={(e) => e.stopPropagation()}>
+    <DataTableRow onClick={onToggle} selected={checked}>
+      <td className="px-5 py-3.5" onClick={(e) => e.stopPropagation()}>
         <Checkbox
           checked={checked}
           onCheckedChange={onToggle}
           aria-label={`Seleccionar ${emp.nombre}`}
         />
-      </TableCell>
-      <TableCell className="font-medium">{emp.nombre}</TableCell>
-      <TableCell>{puestoNombre}</TableCell>
-      <TableCell>{pensumNombre}</TableCell>
-      <TableCell className="text-right">
+      </td>
+      <DataTableCell className="font-medium text-slate-900">{emp.nombre}</DataTableCell>
+      <DataTableCell className="text-slate-600">{puestoNombre}</DataTableCell>
+      <DataTableCell className="text-slate-600">{pensumNombre}</DataTableCell>
+      <DataTableCell className="text-right">
         <Button
           variant="outline"
           size="sm"
+          title="Asignar un pensum adicional, distinto al de su puesto"
           onClick={(e) => {
             e.stopPropagation()
             onSecundaria()
           }}
         >
+          <Icon icon="solar:add-square-bold" width={15} />
           Secundaria
         </Button>
-      </TableCell>
-    </TableRow>
+      </DataTableCell>
+    </DataTableRow>
   )
 }
 
@@ -326,15 +337,15 @@ function SecundariaDialog({
   async function onAssign() {
     const parsed = asignacionSecundariaSchema.safeParse({ idPensum })
     if (!parsed.success) {
-      toast.error('Selecciona un pensum')
+      notify('warn', 'Selecciona un pensum')
       return
     }
     try {
       await asignar.mutateAsync(parsed.data.idPensum)
-      toast.success('Pensum secundario asignado')
+      notify('success', 'Pensum secundario asignado')
       onClose()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Error')
+      notify('error', 'No se pudo asignar', err instanceof Error ? err.message : 'Error')
     }
   }
 
@@ -343,10 +354,12 @@ function SecundariaDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Asignar capacitación secundaria</DialogTitle>
-          <DialogDescription>{emp.nombre}</DialogDescription>
+          <DialogDescription>
+            {emp.nombre} · un pensum adicional, aparte del de su puesto.
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-2">
-          <Label htmlFor="sec-pensum">Pensum</Label>
+          <Label htmlFor="sec-pensum" className="text-xs font-semibold text-slate-600">Pensum</Label>
           <Select value={idPensum} onValueChange={setIdPensum}>
             <SelectTrigger id="sec-pensum">
               <SelectValue placeholder="Selecciona un pensum" />
@@ -364,7 +377,8 @@ function SecundariaDialog({
           <Button variant="outline" onClick={onClose}>
             Cancelar
           </Button>
-          <Button onClick={onAssign} disabled={!idPensum || asignar.isPending}>
+          <Button onClick={onAssign} disabled={!idPensum || asignar.isPending} data-testid={`${TID}__btn-asignar-secundaria`}>
+            <Icon icon={asignar.isPending ? 'svg-spinners:180-ring' : 'solar:check-circle-bold'} width={16} />
             {asignar.isPending ? 'Asignando…' : 'Asignar'}
           </Button>
         </DialogFooter>

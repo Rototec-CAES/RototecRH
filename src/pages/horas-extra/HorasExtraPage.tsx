@@ -1,8 +1,7 @@
-import { useMemo, useState, type ReactNode } from 'react'
-import { AlertTriangle, Boxes, CalendarOff, Check, Clock, Cog, Download, Eye, Loader2, Moon, Package, Search, Sun, UserX, Users, X } from 'lucide-react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Icon } from '@iconify/react'
 
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
 import {
   Dialog,
   DialogContent,
@@ -20,6 +19,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { PageHeader } from '@/components/shared/PageHeader'
+import { EmptyState } from '@/components/shared/DataTable'
+import { TableResultCount, TableSearch } from '@/components/shared/TableToolbar'
+import { ModalCargaPasos } from '@/shared/report/ModalCargaPasos'
+import { FieldLabel, FilterCard, FilterRow, GuiaLectura, KpiCard, Panel } from '@/shared/report/report-ui'
+import { usePreferenciaVisible } from '@/shared/report/report-utils'
 import { useEmpleadosBackendList } from '@/hooks/useEmpleados'
 import {
   useHorasExtra,
@@ -31,6 +36,34 @@ import { horasExtraApi } from '@/api/horas-extra'
 import { apellidosNombre, cn, formatCatorcena, formatRangoCorto } from '@/lib/utils'
 import { exportarExcluidos, exportarHorasExtra } from '@/lib/exportHorasExtra'
 import type { DesgloseSemanaHE, DetalleDiaHE, EmpleadoBackend, ExcluidoHE, FuenteTurno } from '@/types'
+
+const TID = 'rh-horas-extra'
+
+const PASOS_CARGA = [
+  { texto: 'Leyendo turnos programados', ms: 1500 },
+  { texto: 'Cruzando marcajes del biométrico', ms: 2500 },
+  { texto: 'Aplicando ausencias registradas', ms: 1500 },
+  { texto: 'Calculando horas extra por semana', ms: 0 },
+]
+
+const GUIA = [
+  {
+    titulo: 'Efectivas',
+    texto: 'Horas reconocidas en la catorcena: turno programado validado contra el biométrico, menos 1 h de almuerzo por día.',
+  },
+  {
+    titulo: 'Saldo',
+    texto: 'Efectivas menos las ordinarias del sistema (44 h día / 36 h noche por semana, proporcional). En rojo: el colaborador debe horas.',
+  },
+  {
+    titulo: 'HE diurnas / nocturnas',
+    texto: 'Horas extra a pagar, separadas por jornada. Una semana con déficit aporta 0 y no se arrastra a la siguiente.',
+  },
+  {
+    titulo: 'Excluidos',
+    texto: 'Tenían turno programado en el rango y no registraron ninguna marca: no entran al cálculo.',
+  },
+]
 
 interface Fila {
   idEmpleado: number
@@ -44,43 +77,32 @@ interface Fila {
   sistemas: string[]
 }
 
+const FUENTE_META: Record<FuenteTurno, { label: string; icon: string; clase: string }> = {
+  ACABADOS: { label: 'Acabados', icon: 'solar:box-bold', clase: 'bg-violet-100 text-violet-700' },
+  MAQUINAS: { label: 'Máquinas', icon: 'solar:settings-bold', clase: 'bg-teal-100 text-teal-700' },
+  PVC: { label: 'PVC', icon: 'solar:layers-bold', clase: 'bg-sky-100 text-sky-700' },
+  GENERAL: { label: 'General', icon: 'solar:clock-circle-bold', clase: 'bg-indigo-100 text-indigo-700' },
+}
+
 // Etiqueta de la fuente del turno (de qué tabla viene el empleado).
 function FuenteBadge({ fuente }: { fuente?: FuenteTurno }) {
-  if (fuente === 'ACABADOS')
-    return (
-      <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium bg-violet-100 text-violet-700">
-        <Package className="h-3 w-3" /> Acabados
-      </span>
-    )
-  if (fuente === 'MAQUINAS')
-    return (
-      <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium bg-teal-100 text-teal-700">
-        <Cog className="h-3 w-3" /> Máquinas
-      </span>
-    )
-  if (fuente === 'PVC')
-    return (
-      <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium bg-sky-100 text-sky-700">
-        <Boxes className="h-3 w-3" /> PVC
-      </span>
-    )
-  if (fuente === 'GENERAL')
-    return (
-      <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium bg-indigo-100 text-indigo-700">
-        <Clock className="h-3 w-3" /> General
-      </span>
-    )
-  return <span className="text-xs text-muted-foreground">—</span>
+  const meta = fuente ? FUENTE_META[fuente] : undefined
+  if (!meta) return <span className="text-xs text-slate-400">—</span>
+  return (
+    <span className={cn('inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold', meta.clase)}>
+      <Icon icon={meta.icon} width={12} /> {meta.label}
+    </span>
+  )
 }
 
 // Nombre "APELLIDOS - Nombres": apellidos en negrita, nombres tenues (formato de directorio).
 function NombreCell({ nombre }: { nombre: string }) {
   const i = nombre.indexOf(' - ')
-  if (i === -1) return <span className="font-medium">{nombre}</span>
+  if (i === -1) return <span className="font-medium text-slate-800">{nombre}</span>
   return (
     <span className="whitespace-nowrap">
-      <span className="font-semibold">{nombre.slice(0, i)}</span>
-      <span className="text-muted-foreground"> — {nombre.slice(i + 3)}</span>
+      <span className="font-semibold text-slate-800">{nombre.slice(0, i)}</span>
+      <span className="text-slate-500"> — {nombre.slice(i + 3)}</span>
     </span>
   )
 }
@@ -96,14 +118,14 @@ function FuenteFilter({
   counts: Record<'TODAS' | FuenteTurno, number>
 }) {
   const opts: { key: 'TODAS' | FuenteTurno; label: string; dot?: string; active: string }[] = [
-    { key: 'TODAS', label: 'Todos', active: 'bg-foreground text-background' },
+    { key: 'TODAS', label: 'Todos', active: 'bg-cyan-600 text-white' },
     { key: 'ACABADOS', label: 'Acabados', dot: 'bg-violet-500', active: 'bg-violet-600 text-white' },
     { key: 'MAQUINAS', label: 'Máquinas', dot: 'bg-teal-500', active: 'bg-teal-600 text-white' },
     { key: 'PVC', label: 'PVC', dot: 'bg-sky-500', active: 'bg-sky-600 text-white' },
     { key: 'GENERAL', label: 'General', dot: 'bg-indigo-500', active: 'bg-indigo-600 text-white' },
   ]
   return (
-    <div className="inline-flex items-center gap-1 rounded-lg border bg-muted/40 p-1">
+    <div data-testid={`${TID}__filtro-fuente`} className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white p-1">
       {opts.map((o) => {
         const on = value === o.key
         return (
@@ -111,9 +133,10 @@ function FuenteFilter({
             key={o.key}
             type="button"
             onClick={() => onChange(o.key)}
+            aria-pressed={on}
             className={cn(
-              'inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-all',
-              on ? `${o.active} shadow-sm` : 'text-muted-foreground hover:bg-background hover:text-foreground',
+              'inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium transition-all',
+              on ? `${o.active} shadow-sm` : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900',
             )}
           >
             {o.dot && <span className={cn('h-1.5 w-1.5 rounded-full', on ? 'bg-white' : o.dot)} />}
@@ -151,8 +174,15 @@ export default function HorasExtraPage() {
   const [fuenteFiltro, setFuenteFiltro] = useState<'TODAS' | FuenteTurno>('TODAS')
   const [detalle, setDetalle] = useState<{ id: number; nombre: string } | null>(null)
   const [exportando, setExportando] = useState(false)
+  const [guiaVisible, setGuiaVisible] = usePreferenciaVisible('rh-horas-extra.guia', true)
 
   const q = useHorasExtra(desde, hasta)
+  // El modal de pasos solo acompaña la primera carga: la consulta corre sola en cada cambio de
+  // fecha, y ahí basta con el skeleton de las tarjetas y la tabla.
+  const [primeraCargaHecha, setPrimeraCargaHecha] = useState(false)
+  useEffect(() => {
+    if (!q.isLoading) setPrimeraCargaHecha(true)
+  }, [q.isLoading])
   const { data: empleados } = useEmpleadosBackendList()
 
   const empById = useMemo(() => {
@@ -231,83 +261,124 @@ export default function HorasExtraPage() {
   const onExportarExcluidos = () => exportarExcluidos({ excluidos, desde, hasta })
 
   return (
-    <div className="space-y-4">
-      {/* Encabezado */}
-      <div className="flex items-center gap-3">
-        <div className="rounded-xl bg-gradient-to-br from-amber-500/20 via-sky-500/15 to-violet-500/20 p-2.5 ring-1 ring-border">
-          <Clock className="h-5 w-5 text-foreground" />
-        </div>
-        <div>
-          <h1 className="text-lg font-semibold leading-none tracking-tight">Horas Extra</h1>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Cálculo por catorcena · la catorcena y sus 2 semanas arrancan en la fecha «Desde»
-          </p>
-        </div>
-      </div>
+    <div className="space-y-5">
+      <ModalCargaPasos
+        cargando={q.isLoading && !primeraCargaHecha}
+        pasos={PASOS_CARGA}
+        titulo="Calculando horas extra"
+        tituloListo="Horas extra listas"
+        icono="solar:clock-circle-bold"
+        subtitulo={`${formatRangoCorto(desde, hasta)}`}
+        testId={`${TID}__modal-carga`}
+      />
 
-      {/* Barra de filtros */}
-      <Card className="p-3">
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
-          <div className="flex flex-wrap items-end gap-2.5">
-            <div className="flex items-end gap-2 rounded-lg border bg-muted/30 p-2">
-              <div>
-                <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Desde</label>
-                <Input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} className="h-9 w-36" />
-              </div>
-              <span className="pb-2.5 text-muted-foreground">→</span>
-              <div>
-                <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Hasta</label>
-                <Input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} className="h-9 w-36" />
-              </div>
-            </div>
-            <div>
-              <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Empleado</label>
-              <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  value={texto}
-                  onChange={(e) => setTexto(e.target.value)}
-                  placeholder="Buscar por apellido o nombre…"
-                  className="h-9 w-72 pl-9 pr-8"
-                />
-                {texto && (
-                  <button
-                    type="button"
-                    onClick={() => setTexto('')}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                    aria-label="Limpiar búsqueda"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-end gap-2.5">
-            <div>
-              <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Fuente</label>
-              <FuenteFilter value={fuenteFiltro} onChange={setFuenteFiltro} counts={conteoFuente} />
-            </div>
-            <Button
-              onClick={onExportar}
-              disabled={!filas.length || exportando}
-              className="h-9 gap-2 bg-emerald-600 text-white shadow-sm hover:bg-emerald-700"
-              title="Descargar Resumen + Detalle día a día + Excluidos en Excel"
-            >
-              {exportando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-              {exportando ? 'Generando…' : 'Exportar a Excel'}
+      {/* Encabezado + filtros */}
+      <FilterCard>
+        <PageHeader
+          titulo="Horas Extra"
+          icono="solar:clock-circle-bold"
+          descripcion="Cálculo por catorcena: la catorcena y sus 2 semanas arrancan en la fecha «Desde»."
+        >
+          {!guiaVisible && (
+            <Button variant="outline" onClick={() => setGuiaVisible(true)} title="Mostrar la guía de lectura">
+              <Icon icon="solar:book-2-bold" width={16} />
+              Guía
             </Button>
+          )}
+          <Button
+            onClick={onExportar}
+            disabled={!filas.length || exportando}
+            className="bg-emerald-600 text-white shadow-sm hover:bg-emerald-700"
+            title="Descargar Resumen + Detalle día a día + Excluidos en Excel"
+            data-testid={`${TID}__btn-excel`}
+          >
+            <Icon icon={exportando ? 'svg-spinners:180-ring' : 'solar:file-download-linear'} width={16} />
+            {exportando ? 'Generando…' : 'Exportar a Excel'}
+          </Button>
+        </PageHeader>
+
+        <FilterRow>
+          <div>
+            <FieldLabel htmlFor={`${TID}-desde`}>Desde</FieldLabel>
+            <Input
+              id={`${TID}-desde`}
+              type="date"
+              value={desde}
+              onChange={(e) => setDesde(e.target.value)}
+              className="w-40"
+              data-testid={`${TID}__filtro-desde`}
+            />
           </div>
-        </div>
-      </Card>
+          <div>
+            <FieldLabel htmlFor={`${TID}-hasta`}>Hasta</FieldLabel>
+            <Input
+              id={`${TID}-hasta`}
+              type="date"
+              value={hasta}
+              onChange={(e) => setHasta(e.target.value)}
+              className="w-40"
+              data-testid={`${TID}__filtro-hasta`}
+            />
+          </div>
+          <div className="w-full sm:w-72">
+            <FieldLabel>Empleado</FieldLabel>
+            <TableSearch
+              value={texto}
+              onChange={setTexto}
+              placeholder="Buscar por apellido o nombre…"
+              testId={`${TID}__filtro-busqueda`}
+            />
+          </div>
+          <div>
+            <FieldLabel>Fuente del turno</FieldLabel>
+            <FuenteFilter value={fuenteFiltro} onChange={setFuenteFiltro} counts={conteoFuente} />
+          </div>
+        </FilterRow>
+      </FilterCard>
 
-      <div className="grid grid-cols-3 gap-3">
-        <StatChip icon={Users} label="Empleados con HE" value={String(empleadosConHE)} tone="neutral" />
-        <StatChip icon={Sun} label="HE diurnas (h)" value={hhDecimal(totalDia)} tone="warning" />
-        <StatChip icon={Moon} label="HE nocturnas (h)" value={hhDecimal(totalNoche)} tone="info" />
-      </div>
+      <GuiaLectura
+        visible={guiaVisible}
+        onOcultar={() => setGuiaVisible(false)}
+        items={GUIA}
+        titulo="Cómo leer esta pantalla"
+        testId={`${TID}__guia`}
+      />
 
-      <Card>
+      {/* KPIs */}
+      <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <KpiCard
+          label="Empleados con HE"
+          value={String(empleadosConHE)}
+          accent="slate"
+          icon="solar:users-group-rounded-bold"
+          loading={q.isLoading}
+          testId={`${TID}__kpi-empleados`}
+        />
+        <KpiCard
+          label="HE diurnas (h)"
+          value={hhDecimal(totalDia)}
+          accent="amber"
+          icon="solar:sun-bold"
+          loading={q.isLoading}
+          testId={`${TID}__kpi-diurnas`}
+        />
+        <KpiCard
+          label="HE nocturnas (h)"
+          value={hhDecimal(totalNoche)}
+          accent="sky"
+          icon="solar:moon-bold"
+          loading={q.isLoading}
+          testId={`${TID}__kpi-nocturnas`}
+        />
+      </section>
+
+      {/* Detalle */}
+      <Panel
+        flush
+        title="Detalle por empleado y catorcena"
+        subtitle="Solo aparecen quienes tienen horas extra o deben horas. Usa el ojo para ver el cálculo día a día."
+        right={<TableResultCount total={filas.length} label="fila" />}
+      >
         <Table>
           <TableHeader>
             <TableRow>
@@ -333,25 +404,29 @@ export default function HorasExtraPage() {
               ))
             ) : q.isError ? (
               <TableRow>
-                <TableCell colSpan={9} className="py-10 text-center text-destructive">
-                  Error al calcular horas extra. Revisa que el backend y los datos del rango existan.
+                <TableCell colSpan={9}>
+                  <EmptyState
+                    icon="solar:danger-triangle-bold"
+                    title="Error al calcular horas extra"
+                    description="Revisa que el backend y los datos del rango existan."
+                  />
                 </TableCell>
               </TableRow>
             ) : filas.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
-                  Sin horas extra en el rango seleccionado.
+                <TableCell colSpan={9}>
+                  <EmptyState title="Sin horas extra en el rango seleccionado" description="Prueba con otras fechas o quita los filtros." />
                 </TableCell>
               </TableRow>
             ) : (
-              filas.map((f) => (
-                <TableRow key={`${f.idEmpleado}-${f.periodo}`}>
+              filas.map((f, i) => (
+                <TableRow key={`${f.idEmpleado}-${f.periodo}`} className={cn(i % 2 === 1 && 'bg-slate-50/40')}>
                   <TableCell><NombreCell nombre={f.nombre} /></TableCell>
                   <TableCell><FuenteBadge fuente={f.fuente} /></TableCell>
-                  <TableCell className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">
+                  <TableCell className="whitespace-nowrap text-xs tabular-nums text-slate-500">
                     {formatCatorcena(f.periodo)}
                   </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{f.sistemas.join(' · ') || '—'}</TableCell>
+                  <TableCell className="text-xs text-slate-500">{f.sistemas.join(' · ') || '—'}</TableCell>
                   <TableCell className="text-right tabular-nums">{hhDecimal(f.horasEfectivas)}</TableCell>
                   <TableCell
                     className={cn(
@@ -360,7 +435,7 @@ export default function HorasExtraPage() {
                         ? 'font-semibold text-rose-600'
                         : f.excedente > 0.005
                           ? 'text-emerald-600'
-                          : 'text-muted-foreground',
+                          : 'text-slate-400',
                     )}
                   >
                     {hhDecimal(f.excedente)}
@@ -376,9 +451,10 @@ export default function HorasExtraPage() {
                       variant="ghost"
                       size="sm"
                       title="Ver detalle de días/sistema"
+                      aria-label="Ver detalle"
                       onClick={() => setDetalle({ id: f.idEmpleado, nombre: f.nombre })}
                     >
-                      <Eye className="h-4 w-4" />
+                      <Icon icon="solar:eye-bold" width={16} />
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -386,7 +462,7 @@ export default function HorasExtraPage() {
             )}
           </TableBody>
         </Table>
-      </Card>
+      </Panel>
 
       <ExcluidosCard excluidos={excluidos} isLoading={exclQ.isLoading} onExport={onExportarExcluidos} />
 
@@ -396,35 +472,6 @@ export default function HorasExtraPage() {
         empleado={detalle}
         onClose={() => setDetalle(null)}
       />
-    </div>
-  )
-}
-
-function StatChip({
-  icon: Icon,
-  label,
-  value,
-  tone,
-}: {
-  icon: typeof Users
-  label: string
-  value: string
-  tone: 'neutral' | 'warning' | 'info'
-}) {
-  const tones = {
-    neutral: 'text-foreground bg-muted',
-    warning: 'text-amber-600 bg-amber-50',
-    info: 'text-sky-600 bg-sky-50',
-  } as const
-  return (
-    <div className="flex items-center gap-3 rounded-lg border bg-card p-3 shadow-sm">
-      <div className={cn('rounded-md p-2', tones[tone])}>
-        <Icon className="h-4 w-4" />
-      </div>
-      <div className="min-w-0">
-        <p className="text-xl font-semibold leading-none tabular-nums">{value}</p>
-        <p className="mt-1 truncate text-[11px] text-muted-foreground">{label}</p>
-      </div>
     </div>
   )
 }
@@ -444,38 +491,42 @@ function ExcluidosCard({
   if (!isLoading && excluidos.length === 0) return null
 
   return (
-    <Card className="p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <Panel flush={abierto} className={abierto ? undefined : 'p-4'}>
+      <div className={cn('flex flex-wrap items-center justify-between gap-3', abierto && 'border-b border-slate-100 px-5 py-4')}>
         <button
           type="button"
           onClick={() => setAbierto((v) => !v)}
-          className="flex items-center gap-2 text-left text-sm font-semibold"
+          className="flex flex-wrap items-center gap-2 text-left text-sm font-semibold text-slate-900"
+          data-testid={`${TID}__btn-excluidos`}
         >
-          <UserX className="h-4 w-4 text-rose-600" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-rose-50">
+            <Icon icon="solar:user-cross-rounded-bold" width={16} className="text-rose-600" />
+          </div>
           Excluidos del cálculo
-          <span className="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-700">
+          <span className="rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-semibold text-rose-700">
             {excluidos.length}
           </span>
-          <span className="text-xs font-normal text-muted-foreground">
-            programados que no marcaron (no vinieron)
+          <span className="text-xs font-normal text-slate-500">programados que no marcaron (no vinieron)</span>
+          <span className="inline-flex items-center gap-1 text-xs font-medium text-sky-500">
+            {abierto ? 'Ocultar' : 'Ver lista'}
+            <Icon icon={abierto ? 'solar:alt-arrow-up-linear' : 'solar:alt-arrow-down-linear'} width={14} />
           </span>
-          <span className="text-xs text-muted-foreground">· {abierto ? 'ocultar' : 'ver'}</span>
         </button>
         <Button
           variant="outline"
           size="sm"
           onClick={onExport}
           disabled={!excluidos.length}
-          className="h-8 shrink-0 gap-2"
+          className="shrink-0"
           title="Descargar los excluidos en Excel"
         >
-          <Download className="h-3.5 w-3.5" />
+          <Icon icon="solar:file-download-linear" width={14} />
           Exportar
         </Button>
       </div>
 
       {abierto && (
-        <div className="mt-3 overflow-x-auto rounded-md border">
+        <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -502,7 +553,7 @@ function ExcluidosCard({
                       <FuenteBadge fuente={f.fuente} />
                     </TableCell>
                     <TableCell className="text-right tabular-nums">{f.diasProgramados}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">No marcó (no vino)</TableCell>
+                    <TableCell className="text-xs text-slate-500">No marcó (no vino)</TableCell>
                   </TableRow>
                 ))
               )}
@@ -510,7 +561,7 @@ function ExcluidosCard({
           </Table>
         </div>
       )}
-    </Card>
+    </Panel>
   )
 }
 
@@ -558,7 +609,7 @@ function Badge({ tone, children }: { tone: 'red' | 'amber' | 'green' | 'blue'; c
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium',
+        'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold',
         tones[tone],
       )}
     >
@@ -573,21 +624,21 @@ function EstadoDia({ dia, trabajado }: { dia: DetalleDiaHE; trabajado: boolean }
   if (dia.ausenciaEfecto === 'JORNADA_FIJA') {
     return (
       <Badge tone="blue">
-        <CalendarOff className="h-3 w-3" /> {dia.ausenciaNombre ?? 'Ausencia justificada'} · jornada 08:00–17:00
+        <Icon icon="solar:calendar-minimalistic-bold" width={12} /> {dia.ausenciaNombre ?? 'Ausencia justificada'} · jornada 08:00–17:00
       </Badge>
     )
   }
   if (dia.ausenciaEfecto === 'JORNADA_MEDIA') {
     return (
       <Badge tone="blue">
-        <CalendarOff className="h-3 w-3" /> {dia.ausenciaNombre ?? 'Ausencia medio día'} · media jornada 08:00–13:00
+        <Icon icon="solar:calendar-minimalistic-bold" width={12} /> {dia.ausenciaNombre ?? 'Ausencia medio día'} · media jornada 08:00–13:00
       </Badge>
     )
   }
   if (dia.ausenciaEfecto === 'AUSENTE') {
     return (
       <Badge tone="red">
-        <CalendarOff className="h-3 w-3" /> {dia.ausenciaNombre ?? 'Ausencia'} · sin horas
+        <Icon icon="solar:calendar-minimalistic-bold" width={12} /> {dia.ausenciaNombre ?? 'Ausencia'} · sin horas
       </Badge>
     )
   }
@@ -595,7 +646,7 @@ function EstadoDia({ dia, trabajado }: { dia: DetalleDiaHE; trabajado: boolean }
   if (dia.tipo === 'AUSENTE') {
     return (
       <Badge tone="red">
-        <AlertTriangle className="h-3 w-3" /> No se presentó
+        <Icon icon="solar:danger-triangle-bold" width={12} /> No se presentó
       </Badge>
     )
   }
@@ -603,56 +654,56 @@ function EstadoDia({ dia, trabajado }: { dia: DetalleDiaHE; trabajado: boolean }
   if (dia.faltaMarca)
     badges.push(
       <Badge key="fm" tone="red">
-        <AlertTriangle className="h-3 w-3" /> Falta marca
+        <Icon icon="solar:danger-triangle-bold" width={12} /> Falta marca
       </Badge>,
     )
   if (dia.marcaSinTurno)
     badges.push(
       <Badge key="mst" tone="red">
-        <AlertTriangle className="h-3 w-3" /> Marcó s/turno
+        <Icon icon="solar:danger-triangle-bold" width={12} /> Marcó s/turno
       </Badge>,
     )
   if (dia.marcaFueraDeTurno)
     badges.push(
       <Badge key="mft" tone="red">
-        <AlertTriangle className="h-3 w-3" /> Marca fuera de turno
+        <Icon icon="solar:danger-triangle-bold" width={12} /> Marca fuera de turno
       </Badge>,
     )
   if (dia.entradaTarde && dia.entradaDeltaMin != null)
     badges.push(
       <Badge key="et" tone="amber">
-        <Clock className="h-3 w-3" /> Entró {fmtDuracion(dia.entradaDeltaMin)} tarde
+        <Icon icon="solar:clock-circle-bold" width={12} /> Entró {fmtDuracion(dia.entradaDeltaMin)} tarde
       </Badge>,
     )
   if (dia.entradaAntes && dia.entradaDeltaMin != null)
     badges.push(
       <Badge key="ea" tone="amber">
-        <Clock className="h-3 w-3" /> Entró {fmtDuracion(dia.entradaDeltaMin)} antes
+        <Icon icon="solar:clock-circle-bold" width={12} /> Entró {fmtDuracion(dia.entradaDeltaMin)} antes
       </Badge>,
     )
   if (dia.salidaTarde && dia.salidaDeltaMin != null)
     badges.push(
       <Badge key="st" tone="amber">
-        <Clock className="h-3 w-3" /> Salió {fmtDuracion(dia.salidaDeltaMin)} después
+        <Icon icon="solar:clock-circle-bold" width={12} /> Salió {fmtDuracion(dia.salidaDeltaMin)} después
       </Badge>,
     )
   if (dia.salidaTemprano && dia.salidaDeltaMin != null)
     badges.push(
       <Badge key="se" tone="amber">
-        <Clock className="h-3 w-3" /> Salió {fmtDuracion(dia.salidaDeltaMin)} antes
+        <Icon icon="solar:clock-circle-bold" width={12} /> Salió {fmtDuracion(dia.salidaDeltaMin)} antes
       </Badge>,
     )
   if (dia.horarioAutorizado)
     badges.push(
       <Badge key="ha" tone="green">
-        <Check className="h-3 w-3" /> Horario autorizado
+        <Icon icon="solar:check-circle-bold" width={12} /> Horario autorizado
         {dia.cumplimientoPct != null ? ` · meta ${dia.cumplimientoPct.toFixed(2)}%` : ''}
       </Badge>,
     )
   if (badges.length === 0) {
     return trabajado ? (
       <Badge tone="green">
-        <Check className="h-3 w-3" /> OK
+        <Icon icon="solar:check-circle-bold" width={12} /> OK
       </Badge>
     ) : (
       <span className="text-xs text-muted-foreground">—</span>
@@ -708,7 +759,7 @@ function DetalleDialog({
               return (
                 <div key={periodo} className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <h4 className="text-sm font-semibold">
+                    <h4 className="text-sm font-semibold text-slate-900">
                       {formatCatorcena(periodo)}
                       <span className="ml-2 font-normal text-muted-foreground">
                         {diasDelPeriodo(periodo)} días
@@ -727,7 +778,7 @@ function DetalleDialog({
                       </span>
                     </div>
                   </div>
-                  <div className="overflow-x-auto rounded-md border">
+                  <div className="overflow-x-auto rounded-xl border border-slate-200">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -786,7 +837,7 @@ function DetalleDialog({
                           </TableRow>
                         ))}
                         {/* Horas extra finales = suma de saldos (sin multiplicador, sin neteo) */}
-                        <TableRow className="border-t-2 bg-muted/40 font-semibold">
+                        <TableRow className="border-t-2 border-slate-200 bg-slate-50 font-semibold text-slate-700 hover:bg-slate-50">
                           <TableCell colSpan={9} className="text-right">
                             Horas extra finales · total {fmt2(heDia + heNoche)}
                           </TableCell>
@@ -803,10 +854,10 @@ function DetalleDialog({
 
           {/* Detalle día a día (qué día trabajó qué sistema) */}
           <div className="space-y-2">
-            <h4 className="text-sm font-semibold">Detalle día a día</h4>
-            <div className="max-h-[55vh] overflow-auto rounded-md border">
+            <h4 className="text-sm font-semibold text-slate-900">Detalle día a día</h4>
+            <div className="max-h-[55vh] overflow-auto rounded-xl border border-slate-200">
               <Table>
-                <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-10 [&_th]:bg-background">
+                <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-10 [&_th]:bg-slate-50">
                   <TableRow>
                     <TableHead>Fecha</TableHead>
                     <TableHead>Día</TableHead>

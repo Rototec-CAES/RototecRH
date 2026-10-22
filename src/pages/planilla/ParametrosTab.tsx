@@ -1,6 +1,5 @@
 import { toast } from 'sonner'
 
-import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
@@ -10,6 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { Panel } from '@/shared/report/report-ui'
 import { extractApiErrorMessage } from '@/api/client'
 import { useActualizarParametroNomina, useParametrosNomina } from '@/hooks/useNomina'
 import { EditableCell } from './EditableCell'
@@ -21,16 +21,16 @@ export function ParametrosTab() {
   const actualizar = useActualizarParametroNomina()
 
   return (
-    <Card className="overflow-x-auto">
-      <div className="border-b p-4">
-        <p className="font-semibold">Parámetros de nómina</p>
-        <p className="text-xs text-muted-foreground">
-          Tasas y divisores que usa el cálculo. Los cambios aplican al generar o editar una planilla en
-          borrador; las cerradas conservan sus valores. Las tasas van en decimal (4.83 % = 0.0483).
-        </p>
-      </div>
+    <Panel
+      flush
+      icon="solar:tuning-2-bold"
+      title="Parámetros de nómina"
+      subtitle="Tasas y divisores que usa el cálculo. Los cambios aplican al generar o editar una planilla en borrador; las cerradas conservan sus valores. Las tasas van en decimal (4.83 % = 0.0483)."
+    >
       {isLoading ? (
-        <Skeleton className="h-40 w-full" />
+        <div className="p-5">
+          <Skeleton className="h-40 w-full" />
+        </div>
       ) : (
         <Table className="text-xs">
           <TableHeader>
@@ -43,8 +43,8 @@ export function ParametrosTab() {
           <TableBody>
             {data?.map((p) => (
               <TableRow key={p.clave}>
-                <TableCell className="font-mono">{p.clave}</TableCell>
-                <TableCell>{p.descripcion}</TableCell>
+                <TableCell className="font-mono font-semibold text-slate-800">{p.clave}</TableCell>
+                <TableCell className="text-slate-600">{p.descripcion}</TableCell>
                 <TableCell className="text-right">
                   <EditableCell
                     initial={p.valor}
@@ -65,6 +65,6 @@ export function ParametrosTab() {
           </TableBody>
         </Table>
       )}
-    </Card>
+    </Panel>
   )
 }

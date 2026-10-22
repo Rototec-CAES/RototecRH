@@ -1,22 +1,42 @@
+import { Icon } from '@iconify/react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { PageHeader } from '@/components/shared/PageHeader'
 import PensumsTab from './PensumsTab'
 import AsignarTab from './AsignarTab'
 import AsignadosTab from './AsignadosTab'
 import CarnetTab from './CarnetTab'
 
+const TID = 'rh-capacitaciones'
+
+const TABS = [
+  { value: 'pensums', label: 'Pensums', icon: 'solar:book-bookmark-bold' },
+  { value: 'asignar', label: 'Asignar', icon: 'solar:user-plus-bold' },
+  { value: 'asignados', label: 'Asignados', icon: 'solar:users-group-rounded-bold' },
+  { value: 'carnets', label: 'Carnés', icon: 'solar:card-2-bold' },
+]
+
 export default function CapacitacionesPage() {
   return (
-    <Tabs defaultValue="pensums" className="space-y-4">
-      <TabsList>
-        <TabsTrigger value="pensums">Pensums</TabsTrigger>
-        <TabsTrigger value="asignar">Asignar</TabsTrigger>
-        <TabsTrigger value="asignados">Asignados</TabsTrigger>
-        <TabsTrigger value="carnets">Carnets</TabsTrigger>
-      </TabsList>
-      <TabsContent value="pensums"><PensumsTab /></TabsContent>
-      <TabsContent value="asignar"><AsignarTab /></TabsContent>
-      <TabsContent value="asignados"><AsignadosTab /></TabsContent>
-      <TabsContent value="carnets"><CarnetTab /></TabsContent>
-    </Tabs>
+    <div className="space-y-5">
+      <PageHeader
+        titulo="Capacitaciones"
+        icono="solar:diploma-bold"
+        descripcion="Crea los pensums de cada puesto, asígnalos a los empleados, revisa su avance e imprime sus carnés."
+      />
+      <Tabs defaultValue="pensums">
+        <TabsList className="h-auto flex-wrap">
+          {TABS.map((t) => (
+            <TabsTrigger key={t.value} value={t.value} data-testid={`${TID}__tab-${t.value}`}>
+              <Icon icon={t.icon} width={16} />
+              {t.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        <TabsContent value="pensums"><PensumsTab /></TabsContent>
+        <TabsContent value="asignar"><AsignarTab /></TabsContent>
+        <TabsContent value="asignados"><AsignadosTab /></TabsContent>
+        <TabsContent value="carnets"><CarnetTab /></TabsContent>
+      </Tabs>
+    </div>
   )
 }

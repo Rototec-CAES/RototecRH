@@ -3,15 +3,15 @@ import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
 
 const alertVariants = cva(
-  'relative w-full rounded-lg border p-4 [&>svg~*]:pl-7 [&>svg+div]:translate-y-[-3px] [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4 [&>svg]:text-foreground',
+  'relative w-full rounded-xl border p-4 text-sm [&>svg~*]:pl-7 [&>svg+div]:translate-y-[-3px] [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4 [&>svg]:text-foreground',
   {
     variants: {
       variant: {
-        default: 'bg-background text-foreground',
+        default: 'border-slate-200 bg-white text-slate-700',
         destructive:
-          'border-destructive/50 text-destructive dark:border-destructive [&>svg]:text-destructive',
-        info: 'border-blue-200 bg-blue-50 text-blue-900',
-        warning: 'border-amber-200 bg-amber-50 text-amber-900',
+          'border-rose-200 bg-rose-50 text-rose-800 [&>svg]:text-rose-600',
+        info: 'border-sky-200 bg-sky-50 text-sky-900 [&>svg]:text-sky-600',
+        warning: 'border-amber-200 bg-amber-50 text-amber-900 [&>svg]:text-amber-600',
       },
     },
     defaultVariants: { variant: 'default' },
@@ -30,7 +30,7 @@ export const AlertTitle = React.forwardRef<
   HTMLParagraphElement,
   React.HTMLAttributes<HTMLHeadingElement>
 >(({ className, ...props }, ref) => (
-  <h5 ref={ref} className={cn('mb-1 font-medium leading-none tracking-tight', className)} {...props} />
+  <h5 ref={ref} className={cn('mb-1 font-semibold leading-tight', className)} {...props} />
 ))
 AlertTitle.displayName = 'AlertTitle'
 

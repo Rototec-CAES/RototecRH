@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import html2canvas from 'html2canvas'
 import JsBarcode from 'jsbarcode'
-import { Camera, Download, IdCard, Image as ImageIcon } from 'lucide-react'
+import { Icon } from '@iconify/react'
 
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
 import { EmpleadoCombobox } from '@/components/ui/employee-combobox'
 import { toast } from '@/components/ui/sonner'
+import { EmptyState } from '@/components/shared/DataTable'
+import { FieldLabel, Panel, Segmented } from '@/shared/report/report-ui'
 import { useEmpleadosBackendList } from '@/hooks/useEmpleados'
 import { usePuestoOptions } from '@/hooks/usePuestoOptions'
 
@@ -116,21 +117,16 @@ export default function CarnetTab() {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center gap-8 rounded-lg bg-gradient-to-br from-slate-50 to-slate-100 p-6 lg:flex-row lg:items-start">
+    <div className="grid gap-5 lg:grid-cols-[minmax(0,420px)_1fr]">
       {/* Panel de selección */}
-      <Card className="w-full max-w-md border-0 shadow-2xl">
-        <div className="flex flex-col items-center gap-6 p-6">
-          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg">
-            <IdCard className="h-10 w-10 text-white" />
-          </div>
-
-          <div className="text-center">
-            <h1 className="mb-2 text-2xl font-bold text-slate-800">Generador de Carnets</h1>
-            <p className="text-sm text-slate-500">Seleccione un empleado para generar su carnet</p>
-          </div>
-
+      <Panel
+        icon="solar:card-2-bold"
+        title="Generador de carnés"
+        subtitle="Elige un empleado activo, decide si lleva foto y descarga el carné como imagen."
+      >
+        <div className="space-y-5">
           <div className="w-full">
-            <label className="mb-2 block text-sm font-medium text-slate-700">Empleado</label>
+            <FieldLabel>Empleado</FieldLabel>
             <EmpleadoCombobox
               empleados={opcionesEmpleados}
               value={empleadoId}
@@ -143,66 +139,61 @@ export default function CarnetTab() {
           </div>
 
           {empleadoSeleccionado && (
-            <div className="flex w-full flex-col gap-3">
-              <div className="flex w-full gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setConFoto(false)
-                    setFoto(null)
+            <div className="flex w-full flex-col gap-4">
+              <div>
+                <FieldLabel>Tipo de carné</FieldLabel>
+                <Segmented
+                  value={conFoto ? 'con' : 'sin'}
+                  onChange={(v) => {
+                    if (v === 'sin') {
+                      setConFoto(false)
+                      setFoto(null)
+                    } else {
+                      setConFoto(true)
+                    }
                   }}
-                  className={`flex flex-1 items-center justify-center gap-2 rounded-md border-0 p-2 text-sm font-medium text-white shadow-lg transition-all hover:shadow-xl ${
-                    !conFoto ? 'bg-gradient-to-r from-blue-500 to-blue-600' : 'bg-slate-400'
-                  }`}
-                >
-                  <ImageIcon className="h-4 w-4" />
-                  Sin Foto
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setConFoto(true)}
-                  className={`flex flex-1 items-center justify-center gap-2 rounded-md border-0 p-2 text-sm font-medium text-white shadow-lg transition-all hover:shadow-xl ${
-                    conFoto ? 'bg-gradient-to-r from-blue-500 to-blue-600' : 'bg-slate-400'
-                  }`}
-                >
-                  <Camera className="h-4 w-4" />
-                  Con Foto
-                </button>
+                  options={[
+                    { value: 'sin', label: <><Icon icon="solar:gallery-remove-bold" width={15} />Sin foto</> },
+                    { value: 'con', label: <><Icon icon="solar:camera-bold" width={15} />Con foto</> },
+                  ]}
+                  testId="rh-capacitaciones__carnet-tipo"
+                />
               </div>
 
               {conFoto && (
                 <div className="w-full">
-                  <label className="mb-2 block text-sm font-medium text-slate-700">
-                    Foto del empleado
-                  </label>
+                  <FieldLabel>Foto del empleado</FieldLabel>
                   <input
                     ref={fileInputRef}
                     type="file"
                     accept="image/*"
                     onChange={handleFotoChange}
-                    className="w-full text-sm text-slate-500 file:mr-4 file:rounded-lg file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-blue-700 hover:file:bg-blue-100"
+                    className="w-full text-sm text-slate-500 file:mr-4 file:rounded-lg file:border-0 file:bg-sky-50 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-sky-700 hover:file:bg-sky-100"
                   />
+                  {!foto && (
+                    <p className="mt-1.5 text-xs text-amber-600">Sube una foto para poder descargar el carné.</p>
+                  )}
                 </div>
               )}
 
               <Button
-                className="w-full border-0 bg-gradient-to-r from-green-500 to-green-600 p-2 text-white shadow-lg transition-all hover:shadow-xl"
+                className="w-full bg-emerald-600 hover:bg-emerald-700"
                 disabled={loading || (conFoto && !foto)}
                 onClick={handleGenerarCarnet}
+                data-testid="rh-capacitaciones__btn-descargar-carnet"
               >
-                <Download className="mr-2 h-4 w-4" />
-                {loading ? 'Generando…' : 'Descargar Carnet'}
+                <Icon icon={loading ? 'svg-spinners:180-ring' : 'solar:download-minimalistic-bold'} width={16} />
+                {loading ? 'Generando…' : 'Descargar carné'}
               </Button>
             </div>
           )}
         </div>
-      </Card>
+      </Panel>
 
       {/* Preview del carnet */}
-      {empleadoSeleccionado && (
-        <div className="flex flex-col items-center gap-4">
-          <p className="font-medium text-slate-600">Vista previa</p>
-
+      {empleadoSeleccionado ? (
+        <Panel title="Vista previa" subtitle="Así se verá el carné descargado." className="flex flex-col">
+          <div className="flex justify-center rounded-xl bg-slate-50 p-6">
           <div ref={carnetRef} className="shadow-2xl" style={{ width: '250px', height: '350px' }}>
             {conFoto ? (
               <>
@@ -282,7 +273,16 @@ export default function CarnetTab() {
               </>
             )}
           </div>
-        </div>
+          </div>
+        </Panel>
+      ) : (
+        <Panel>
+          <EmptyState
+            icon="solar:card-2-bold"
+            title="Elige un empleado"
+            description="La vista previa del carné aparece aquí en cuanto selecciones un empleado."
+          />
+        </Panel>
       )}
     </div>
   )

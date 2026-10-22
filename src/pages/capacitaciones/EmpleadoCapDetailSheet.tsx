@@ -1,11 +1,10 @@
 import { type ReactNode, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Copy, ExternalLink } from 'lucide-react'
+import { Icon } from '@iconify/react'
 import { toast } from 'sonner'
 import { extractApiErrorMessage } from '@/api/client'
 
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -25,7 +24,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Separator } from '@/components/ui/separator'
+import { confirmar } from '@/components/shared/ConfirmDialog'
+import { Tag } from '@/shared/report/report-ui'
 import {
   Sheet,
   SheetContent,
@@ -71,7 +71,12 @@ export function EmpleadoCapDetailSheet({ empleadoId, open, onOpenChange }: Props
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-xl">
         <SheetHeader>
-          <SheetTitle>Capacitación del empleado</SheetTitle>
+          <SheetTitle className="flex items-center gap-2">
+            <span className="grid h-8 w-8 place-items-center rounded-xl bg-slate-900 text-white">
+              <Icon icon="solar:diploma-bold" width={16} />
+            </span>
+            Capacitación del empleado
+          </SheetTitle>
           <SheetDescription>
             Las notas, intentos y licencia son de solo lectura (se calculan al evaluar).
           </SheetDescription>
@@ -83,16 +88,21 @@ export function EmpleadoCapDetailSheet({ empleadoId, open, onOpenChange }: Props
             <Skeleton className="h-24 w-full" />
           </div>
         ) : isError || !data ? (
-          <p className="mt-6 text-sm text-destructive">Error al cargar el detalle</p>
+          <p className="mt-6 flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            <Icon icon="solar:danger-triangle-bold" width={16} />
+            No se pudo cargar el detalle. Cierra y vuelve a abrir.
+          </p>
         ) : (
-          <div className="mt-6 space-y-8">
+          <div className="mt-6 space-y-6">
             <DiplomaButton empleadoId={empleadoId} asignaciones={data.asignaciones} />
             <PrimariaSection empleadoId={empleadoId} />
             <SecundariaSection empleadoId={empleadoId} />
             <div>
-              <SectionTitle>Asignaciones</SectionTitle>
+              <SectionTitle icon="solar:checklist-minimalistic-bold">Asignaciones</SectionTitle>
               {data.asignaciones.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Sin asignaciones.</p>
+                <p className="rounded-xl border border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-500">
+                  Sin asignaciones. Usa los botones de arriba para asignarle un pensum.
+                </p>
               ) : (
                 <div className="space-y-4">
                   {data.asignaciones.map((a) => (
@@ -108,14 +118,12 @@ export function EmpleadoCapDetailSheet({ empleadoId, open, onOpenChange }: Props
   )
 }
 
-function SectionTitle({ children }: { children: ReactNode }) {
+function SectionTitle({ children, icon }: { children: ReactNode; icon?: string }) {
   return (
-    <>
-      <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-        {children}
-      </h3>
-      <Separator className="mb-3" />
-    </>
+    <h3 className="mb-3 flex items-center gap-2 border-b border-slate-100 pb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+      {icon && <Icon icon={icon} width={15} className="text-slate-400" />}
+      {children}
+    </h3>
   )
 }
 
@@ -168,19 +176,21 @@ function DiplomaButton({
 
   return (
     <div>
-      <SectionTitle>Diploma</SectionTitle>
+      <SectionTitle icon="solar:medal-ribbons-star-bold">Diploma</SectionTitle>
       <Button
         size="sm"
+        className="bg-emerald-600 hover:bg-emerald-700"
         onClick={onGenerar}
         disabled={!todosAprobados || generando}
         title={
           todosAprobados ? undefined : 'Todos los módulos deben estar aprobados'
         }
       >
+        <Icon icon={generando ? 'svg-spinners:180-ring' : 'solar:file-download-bold'} width={15} />
         Generar diploma
       </Button>
       {!todosAprobados && (
-        <p className="mt-2 text-xs text-muted-foreground">
+        <p className="mt-2 text-xs text-slate-500">
           Todos los módulos deben estar aprobados.
         </p>
       )}
@@ -200,8 +210,9 @@ function PrimariaSection({ empleadoId }: { empleadoId: number }) {
   }
   return (
     <div>
-      <SectionTitle>Asignación primaria</SectionTitle>
+      <SectionTitle icon="solar:user-check-bold">Asignación primaria</SectionTitle>
       <Button size="sm" onClick={onAssign} disabled={asignar.isPending}>
+        <Icon icon={asignar.isPending ? 'svg-spinners:180-ring' : 'solar:user-plus-bold'} width={15} />
         Asignar pensum primario (por puesto)
       </Button>
     </div>
@@ -230,7 +241,7 @@ function SecundariaSection({ empleadoId }: { empleadoId: number }) {
 
   return (
     <div>
-      <SectionTitle>Asignación secundaria</SectionTitle>
+      <SectionTitle icon="solar:add-square-bold">Asignación secundaria</SectionTitle>
       <div className="flex items-end gap-2">
         <div className="flex-1">
           <Select value={idPensum} onValueChange={setIdPensum}>
@@ -274,7 +285,13 @@ function AsignacionCard({
   }
 
   async function repetirEntera() {
-    if (!window.confirm('¿Reabrir toda la capacitación? Se reiniciarán todos los módulos.')) return
+    const ok = await confirmar({
+      titulo: '¿Reabrir toda la capacitación?',
+      mensaje: 'Se reiniciarán todos los módulos.',
+      textoConfirmar: 'Reabrir',
+      peligro: true,
+    })
+    if (!ok) return
     try {
       await reabrir.mutateAsync({ idAsignacion: asignacion.id })
       setSeleccionados([])
@@ -295,28 +312,32 @@ function AsignacionCard({
   }
 
   const pensumNombre = pensumArbol?.nombre ?? 'Pensum'
-  const tipoBadgeVariant: 'default' | 'secondary' =
-    asignacion.tipo === 'primaria' ? 'default' : 'secondary'
   const tipoLabel = asignacion.tipo === 'primaria' ? 'Primaria' : 'Secundaria'
 
   return (
-    <div className="rounded-md border p-3">
+    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="mb-2 flex flex-wrap items-center gap-2">
-        <Badge variant={tipoBadgeVariant}>{tipoLabel}</Badge>
-        <span className="text-xs text-muted-foreground">{pensumNombre}</span>
+        <Tag severity={asignacion.tipo === 'primaria' ? 'info' : 'secondary'} value={tipoLabel} />
+        <span className="text-sm font-semibold text-slate-800">{pensumNombre}</span>
         {(() => {
           if (asignacion.venceLicencia !== null) {
             const hoy = new Date(); hoy.setHours(0,0,0,0)
             return new Date(asignacion.venceLicencia) >= hoy
-              ? <Badge variant="success">Licencia activa</Badge>
-              : <Badge variant="destructive">Licencia expirada</Badge>
+              ? <Tag severity="success" icon="solar:shield-check-bold" value="Licencia activa" />
+              : <Tag severity="danger" icon="solar:shield-warning-bold" value="Licencia expirada" />
           }
-          return <Badge variant="outline">Sin licencia</Badge>
+          return <Tag severity="secondary" value="Sin licencia" />
         })()}
       </div>
-      <dl className="mb-3 space-y-1 text-xs text-muted-foreground">
-        <div>Vence licencia: {asignacion.venceLicencia ? formatDate(asignacion.venceLicencia) : '—'}</div>
-        <div>Finaliza: {asignacion.fechaFinaliza ? formatDate(asignacion.fechaFinaliza) : '—'}</div>
+      <dl className="mb-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-500">
+        <div className="flex items-center gap-1">
+          <Icon icon="solar:calendar-bold" width={13} className="text-slate-400" />
+          Vence licencia: <span className="font-medium text-slate-700">{asignacion.venceLicencia ? formatDate(asignacion.venceLicencia) : '—'}</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <Icon icon="solar:flag-bold" width={13} className="text-slate-400" />
+          Finaliza: <span className="font-medium text-slate-700">{asignacion.fechaFinaliza ? formatDate(asignacion.fechaFinaliza) : '—'}</span>
+        </div>
       </dl>
       <div className="space-y-2">
         {asignacion.detalles.map((d) => (
@@ -337,6 +358,7 @@ function AsignacionCard({
           onClick={repetirEntera}
           disabled={reabrir.isPending || asignacion.detalles.length === 0}
         >
+          <Icon icon="solar:restart-bold" width={15} />
           Repetir capacitación entera
         </Button>
         <Button
@@ -345,6 +367,7 @@ function AsignacionCard({
           onClick={repetirSeleccionados}
           disabled={reabrir.isPending || seleccionados.length === 0}
         >
+          <Icon icon="solar:refresh-square-bold" width={15} />
           Repetir seleccionados ({seleccionados.length})
         </Button>
       </div>
@@ -354,9 +377,9 @@ function AsignacionCard({
 
 function estadoBadge(estado: string) {
   const e = estado.toLowerCase()
-  if (e === 'aprobado') return <Badge variant="success">Aprobado</Badge>
-  if (e === 'no aprobado') return <Badge variant="destructive">No aprobado</Badge>
-  return <Badge variant="warning">{estado}</Badge>
+  if (e === 'aprobado') return <Tag severity="success" value="Aprobado" />
+  if (e === 'no aprobado') return <Tag severity="danger" value="No aprobado" />
+  return <Tag severity="warning" value={estado} />
 }
 
 function DetalleRow({
@@ -415,7 +438,7 @@ function DetalleRow({
   const moduloLabel = moduloNombre ?? 'Módulo'
 
   return (
-    <div className="rounded border bg-muted/30 p-2 text-sm">
+    <div className="rounded-lg border border-slate-100 bg-slate-50/70 p-2.5 text-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-3">
           <Checkbox
@@ -423,12 +446,12 @@ function DetalleRow({
             onCheckedChange={(c) => onCheckedChange(c === true)}
             aria-label="Seleccionar módulo para repetir"
           />
-          <span className="font-medium">{moduloLabel}</span>
-          <span className="text-xs text-muted-foreground">
-            Nota: {detalle.puntuacion != null ? detalle.puntuacion : '—'}
+          <span className="font-medium text-slate-800">{moduloLabel}</span>
+          <span className="text-xs text-slate-500">
+            Nota: <span className="font-semibold text-slate-700">{detalle.puntuacion != null ? detalle.puntuacion : '—'}</span>
           </span>
           {estadoBadge(detalle.estado)}
-          <span className="text-xs text-muted-foreground">Intentos: {detalle.intentos}</span>
+          <span className="text-xs text-slate-500">Intentos: {detalle.intentos}</span>
         </div>
         <div className="flex flex-col items-end gap-1">
           <Button
@@ -438,10 +461,11 @@ function DetalleRow({
             disabled={btnDisabled}
             title={btnTitle}
           >
+            <Icon icon="solar:document-add-bold" width={15} />
             Generar examen
           </Button>
           {tieneEvaluacion === false && (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-slate-400">
               Este módulo no tiene evaluación generada.
             </p>
           )}
@@ -449,20 +473,21 @@ function DetalleRow({
       </div>
 
       {examLink && (
-        <div className="mt-2 space-y-1">
+        <div className="mt-2 space-y-1.5 rounded-lg border border-sky-100 bg-sky-50 p-2">
+          <p className="text-xs font-medium text-sky-800">Comparte este link con el empleado para que haga el examen:</p>
           <div className="flex items-center gap-2">
-            <Input readOnly value={examLink} className="h-8 text-xs" />
+            <Input readOnly value={examLink} className="h-8 bg-white text-xs" />
             <Button variant="ghost" size="sm" onClick={copyLink}>
-              <Copy className="h-4 w-4" />
+              <Icon icon="solar:copy-bold" width={15} />
               Copiar link
             </Button>
             <a
               href={examLink}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-3 text-xs font-medium hover:bg-accent hover:text-accent-foreground"
+              className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 hover:bg-slate-50"
             >
-              <ExternalLink className="h-3.5 w-3.5" />
+              <Icon icon="solar:square-top-down-bold" width={14} />
               Abrir examen
             </a>
           </div>
@@ -479,20 +504,21 @@ function DetalleRow({
           </DialogHeader>
           <form onSubmit={form.handleSubmit(onGenerar)} className="space-y-4">
             <div className="space-y-1">
-              <Label htmlFor={`horas-${detalle.id}`}>Horas de vigencia</Label>
+              <Label htmlFor={`horas-${detalle.id}`} className="text-xs font-semibold text-slate-600">Horas de vigencia</Label>
               <Input
                 id={`horas-${detalle.id}`}
                 type="number"
                 {...form.register('horasVigencia')}
               />
               {form.formState.errors.horasVigencia && (
-                <p className="text-xs text-destructive">
+                <p className="text-xs text-red-600">
                   {form.formState.errors.horasVigencia.message}
                 </p>
               )}
             </div>
             <DialogFooter>
-              <Button type="submit" disabled={generar.isPending}>
+              <Button type="submit" disabled={generar.isPending} data-testid="rh-capacitaciones__btn-generar-examen">
+                <Icon icon={generar.isPending ? 'svg-spinners:180-ring' : 'solar:document-add-bold'} width={16} />
                 Generar
               </Button>
             </DialogFooter>

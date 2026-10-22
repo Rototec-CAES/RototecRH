@@ -2,6 +2,7 @@ import type {
   DepartamentoRototecType,
   EstadoCivilType,
   FormaPagoType,
+  FrecuenciaPagoType,
   JornadaType,
   SexoType,
   TemporalidadContratoType,
@@ -179,6 +180,15 @@ export const FORMAS_PAGO: { value: FormaPagoType; label: string }[] = [
   { value: 'TRANSFERENCIA', label: 'Transferencia' },
   { value: 'CHEQUE', label: 'Cheque' },
 ]
+
+// =====================================================
+// FRECUENCIA DE PAGO — a qué planilla entra el colaborador
+// =====================================================
+export const FRECUENCIAS_PAGO: { value: FrecuenciaPagoType; label: string }[] = [
+  { value: 'QUINCENAL', label: 'Quincenal' },
+  { value: 'MENSUAL', label: 'Mensual' },
+]
+export const FRECUENCIA_PAGO_DEFAULT: FrecuenciaPagoType = 'QUINCENAL'
 
 // =====================================================
 // TIPO DE CUENTA BANCARIA

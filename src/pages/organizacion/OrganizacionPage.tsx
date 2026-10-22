@@ -1,18 +1,7 @@
-import { useEffect, useMemo, useState, type ComponentType } from 'react'
-import {
-  Briefcase,
-  Building2,
-  ChevronRight,
-  FolderTree,
-  Network,
-  Pencil,
-  Plus,
-  Trash2,
-} from 'lucide-react'
-import { toast } from 'sonner'
+import { useEffect, useMemo, useState } from 'react'
+import { Icon } from '@iconify/react'
 
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
 import {
   Select,
   SelectContent,
@@ -21,6 +10,10 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
+import { PageHeader } from '@/components/shared/PageHeader'
+import { EmptyState } from '@/components/shared/DataTable'
+import { confirmar } from '@/components/shared/ConfirmDialog'
+import { FieldLabel, FilterCard, KpiCard, Panel } from '@/shared/report/report-ui'
 import { extractApiErrorMessage } from '@/api/client'
 import type { DepartamentoNodo, PuestoNodo, SubDepartamentoNodo } from '@/api/estructura'
 import { useEmpresas, usePaises } from '@/hooks/useCompanyCatalogos'
@@ -30,8 +23,11 @@ import {
   useEliminarPuesto,
   useEliminarSubDepartamento,
 } from '@/hooks/useEstructura'
+import { notify } from '@/lib/notify'
 import { cn } from '@/lib/utils'
 import { NodoDialog, type NodoDialogState } from './NodoDialog'
+
+const TID = 'rh-organizacion'
 
 interface TreeApi {
   openDeptos: Set<number>
@@ -108,12 +104,18 @@ export default function OrganizacionPage() {
   }
 
   async function confirmarEliminar(label: string, fn: () => Promise<unknown>) {
-    if (!confirm(`¿Eliminar ${label}? Esta acción no se puede deshacer.`)) return
+    const ok = await confirmar({
+      titulo: `¿Eliminar ${label}?`,
+      mensaje: 'Esta acción no se puede deshacer.',
+      textoConfirmar: 'Eliminar',
+      peligro: true,
+    })
+    if (!ok) return
     try {
       await fn()
-      toast.success('Eliminado')
+      notify('success', 'Eliminado')
     } catch (err) {
-      toast.error(extractApiErrorMessage(err))
+      notify('error', 'No se pudo eliminar', extractApiErrorMessage(err))
     }
   }
 
@@ -137,29 +139,26 @@ export default function OrganizacionPage() {
     eliminarPuesto: (p) => confirmarEliminar(`el puesto "${p.nombre}"`, () => delPuesto.mutateAsync(p.id)),
   }
 
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start gap-3">
-        <span className="mt-0.5 grid h-10 w-10 place-items-center rounded-xl bg-indigo-600 text-white shadow-sm shadow-indigo-600/30">
-          <Network className="h-5 w-5" />
-        </span>
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-indigo-600">
-            Estructura organizacional
-          </p>
-          <h2 className="text-lg font-semibold leading-tight">Departamentos, sub-departamentos y puestos</h2>
-          <p className="text-sm text-muted-foreground">
-            Gestioná la jerarquía por empresa. Eliminá ramas vacías; las que tienen dependientes quedan protegidas.
-          </p>
-        </div>
-      </div>
+  const nuevoDepto = () => setDialog({ open: true, nivel: 'departamento', mode: 'crear', parentId: empresaId })
 
-      {/* Toolbar */}
-      <Card className="flex flex-col gap-4 p-4 lg:flex-row lg:items-end lg:justify-between">
-        <div className="flex flex-wrap items-end gap-3">
+  return (
+    <div className="space-y-5">
+      {/* Encabezado + filtros */}
+      <FilterCard>
+        <PageHeader
+          titulo="Organización"
+          icono="solar:structure-bold"
+          descripcion="Departamentos, sub-departamentos y puestos de cada empresa. Solo se pueden eliminar las ramas que no tienen nada adentro."
+        >
+          <Button disabled={!empresaId} onClick={nuevoDepto} data-testid={`${TID}__btn-nuevo-depto`}>
+            <Icon icon="solar:add-circle-bold" width={16} />
+            Nuevo departamento
+          </Button>
+        </PageHeader>
+
+        <div className="mt-4 flex flex-wrap items-end gap-3 border-t border-dashed border-slate-200 pt-4">
           <div>
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">País</label>
+            <FieldLabel>País</FieldLabel>
             <Select
               value={paisId != null ? String(paisId) : undefined}
               onValueChange={(v) => {
@@ -167,7 +166,9 @@ export default function OrganizacionPage() {
                 setEmpresaId(undefined)
               }}
             >
-              <SelectTrigger className="w-44"><SelectValue placeholder="País" /></SelectTrigger>
+              <SelectTrigger className="w-44" data-testid={`${TID}__filtro-pais`}>
+                <SelectValue placeholder="País" />
+              </SelectTrigger>
               <SelectContent>
                 {(paises ?? []).map((p) => (
                   <SelectItem key={p.id} value={String(p.id)}>{p.nombre}</SelectItem>
@@ -176,13 +177,15 @@ export default function OrganizacionPage() {
             </Select>
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">Empresa</label>
+            <FieldLabel>Empresa</FieldLabel>
             <Select
               value={empresaId != null ? String(empresaId) : undefined}
               onValueChange={(v) => setEmpresaId(Number(v))}
               disabled={!empresas?.length}
             >
-              <SelectTrigger className="w-64"><SelectValue placeholder="Empresa" /></SelectTrigger>
+              <SelectTrigger className="w-64" data-testid={`${TID}__filtro-empresa`}>
+                <SelectValue placeholder="Empresa" />
+              </SelectTrigger>
               <SelectContent>
                 {(empresas ?? []).map((e) => (
                   <SelectItem key={e.id} value={String(e.id)}>{e.nombre}</SelectItem>
@@ -191,56 +194,55 @@ export default function OrganizacionPage() {
             </Select>
           </div>
         </div>
+      </FilterCard>
 
-        <div className="flex items-center gap-4">
-          <div className="hidden items-center gap-3 font-mono text-xs text-muted-foreground sm:flex">
-            <span><strong className="text-foreground tabular-nums">{totales.deptos}</strong> deptos</span>
-            <span className="text-border">·</span>
-            <span><strong className="text-foreground tabular-nums">{totales.subs}</strong> sub</span>
-            <span className="text-border">·</span>
-            <span><strong className="text-foreground tabular-nums">{totales.puestos}</strong> puestos</span>
-          </div>
-          <Button
-            disabled={!empresaId}
-            onClick={() => setDialog({ open: true, nivel: 'departamento', mode: 'crear', parentId: empresaId })}
-          >
-            <Plus className="h-4 w-4" />Nuevo departamento
-          </Button>
-        </div>
-      </Card>
+      {/* Totales */}
+      {empresaId && (
+        <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <KpiCard label="Departamentos" value={totales.deptos} accent="sky" icon="solar:buildings-2-bold" loading={isLoading} />
+          <KpiCard label="Sub-departamentos" value={totales.subs} accent="cyan" icon="solar:folder-with-files-bold" loading={isLoading} />
+          <KpiCard label="Puestos" value={totales.puestos} accent="violet" icon="solar:case-round-bold" loading={isLoading} />
+        </section>
+      )}
 
       {/* Árbol */}
-      <Card className="p-3 sm:p-4">
+      <Panel
+        title={empresaNombre ? `Estructura de ${empresaNombre}` : 'Estructura'}
+        subtitle="Haz clic en un departamento o sub-departamento para ver lo que tiene adentro. Pasa el mouse sobre una fila para editarla o eliminarla."
+      >
         {!empresaId ? (
-          <EstadoVacio icon={Building2} titulo="Elegí una empresa" detalle="Seleccioná un país y una empresa para ver su estructura." />
+          <EmptyState
+            icon="solar:buildings-2-bold"
+            title="Elige una empresa"
+            description="Selecciona un país y una empresa arriba para ver su estructura."
+          />
         ) : isLoading ? (
-          <div className="space-y-2 p-2">
+          <div className="space-y-2">
             {Array.from({ length: 5 }).map((_, i) => (
-              <Skeleton key={i} className="h-11 w-full" />
+              <Skeleton key={i} className="h-12 w-full rounded-xl" />
             ))}
           </div>
         ) : !arbol?.length ? (
-          <EstadoVacio
-            icon={FolderTree}
-            titulo="Sin departamentos"
-            detalle={`${empresaNombre ?? 'Esta empresa'} todavía no tiene departamentos.`}
-            accion={
-              <Button
-                variant="outline"
-                onClick={() => setDialog({ open: true, nivel: 'departamento', mode: 'crear', parentId: empresaId })}
-              >
-                <Plus className="h-4 w-4" />Crear el primero
-              </Button>
-            }
-          />
+          <div className="flex flex-col items-center">
+            <EmptyState
+              icon="solar:folder-open-bold"
+              title="Sin departamentos"
+              description={`${empresaNombre ?? 'Esta empresa'} todavía no tiene departamentos. Crea el primero con el botón de abajo.`}
+              className="pb-4"
+            />
+            <Button variant="outline" onClick={nuevoDepto} className="mb-10">
+              <Icon icon="solar:add-circle-bold" width={16} />
+              Crear el primero
+            </Button>
+          </div>
         ) : (
-          <div className="space-y-1">
+          <div className="space-y-2">
             {arbol.map((d, i) => (
               <DepartamentoNode key={d.id} depto={d} api={api} index={i} />
             ))}
           </div>
         )}
-      </Card>
+      </Panel>
 
       <NodoDialog state={dialog} onOpenChange={(open) => setDialog((s) => ({ ...s, open }))} />
     </div>
@@ -249,41 +251,65 @@ export default function OrganizacionPage() {
 
 // ───────────────────────── Nodos ─────────────────────────
 
+function Chevron({ open, onClick }: { open: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+      aria-label={open ? 'Ocultar contenido' : 'Ver contenido'}
+      title={open ? 'Ocultar contenido' : 'Ver contenido'}
+    >
+      <Icon
+        icon="solar:alt-arrow-right-bold"
+        width={14}
+        className={cn('transition-transform duration-200', open && 'rotate-90')}
+      />
+    </button>
+  )
+}
+
+function Contador({ n, singular, plural }: { n: number; singular: string; plural: string }) {
+  return (
+    <span className="hidden shrink-0 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-500 tabular-nums sm:inline">
+      {n} {n === 1 ? singular : plural}
+    </span>
+  )
+}
+
 function DepartamentoNode({ depto, api, index }: { depto: DepartamentoNodo; api: TreeApi; index: number }) {
   const open = api.openDeptos.has(depto.id)
   return (
     <div
-      className="animate-in fade-in slide-in-from-bottom-1"
+      className={cn(
+        'animate-in fade-in slide-in-from-bottom-1 overflow-hidden rounded-xl border border-slate-200 bg-white',
+        open && 'shadow-sm',
+      )}
       style={{ animationDelay: `${Math.min(index, 12) * 35}ms`, animationFillMode: 'both' }}
     >
-      <div className="group flex items-center gap-2 rounded-lg px-2 py-2 transition-colors hover:bg-muted/60">
-        <button
-          type="button"
-          onClick={() => api.toggleDepto(depto.id)}
-          className="grid h-6 w-6 place-items-center rounded text-muted-foreground hover:text-foreground"
-          aria-label={open ? 'Colapsar' : 'Expandir'}
-        >
-          <ChevronRight className={cn('h-4 w-4 transition-transform duration-200', open && 'rotate-90')} />
-        </button>
-        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-indigo-600 text-white shadow-sm">
-          <Building2 className="h-4 w-4" />
+      <div className={cn('group flex items-center gap-2 px-3 py-2.5 transition-colors hover:bg-slate-50', open && 'bg-slate-50/70')}>
+        <Chevron open={open} onClick={() => api.toggleDepto(depto.id)} />
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-slate-900 text-white shadow-sm">
+          <Icon icon="solar:buildings-2-bold" width={17} />
         </span>
         <button type="button" onClick={() => api.toggleDepto(depto.id)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
-          <span className="truncate text-sm font-semibold">{depto.nombre}</span>
+          <span className="truncate text-sm font-semibold text-slate-900">{depto.nombre}</span>
           {depto.codigo && (
-            <span className="shrink-0 rounded bg-indigo-50 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-indigo-700 ring-1 ring-indigo-100">
+            <span className="shrink-0 rounded-md bg-sky-50 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-sky-700 ring-1 ring-sky-100">
               {depto.codigo}
             </span>
           )}
         </button>
-        <span className="hidden shrink-0 font-mono text-xs text-muted-foreground tabular-nums sm:inline">
-          {depto.subdepartamentos.length} sub
-        </span>
-        <RowActions onEdit={() => api.editarDepartamento(depto)} onDelete={() => api.eliminarDepartamento(depto)} />
+        <Contador n={depto.subdepartamentos.length} singular="sub-depto" plural="sub-deptos" />
+        <RowActions
+          tipo="departamento"
+          onEdit={() => api.editarDepartamento(depto)}
+          onDelete={() => api.eliminarDepartamento(depto)}
+        />
       </div>
 
       <ExpandRegion open={open}>
-        <div className="ml-[1.45rem] space-y-1 border-l border-dashed border-border pb-1 pl-4 pt-1">
+        <div className="ml-[1.55rem] space-y-1 border-l border-dashed border-slate-200 py-2 pl-4 pr-3">
           {depto.subdepartamentos.map((s) => (
             <SubNode key={s.id} sub={s} api={api} />
           ))}
@@ -298,29 +324,20 @@ function SubNode({ sub, api }: { sub: SubDepartamentoNodo; api: TreeApi }) {
   const open = api.openSubs.has(sub.id)
   return (
     <div>
-      <div className="group flex items-center gap-2 rounded-md px-2 py-1.5 transition-colors hover:bg-muted/50">
-        <button
-          type="button"
-          onClick={() => api.toggleSub(sub.id)}
-          className="grid h-6 w-6 place-items-center rounded text-muted-foreground hover:text-foreground"
-          aria-label={open ? 'Colapsar' : 'Expandir'}
-        >
-          <ChevronRight className={cn('h-3.5 w-3.5 transition-transform duration-200', open && 'rotate-90')} />
-        </button>
-        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-indigo-50 text-indigo-600 ring-1 ring-indigo-100">
-          <FolderTree className="h-3.5 w-3.5" />
+      <div className="group flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-slate-50">
+        <Chevron open={open} onClick={() => api.toggleSub(sub.id)} />
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-sky-50 text-sky-600 ring-1 ring-sky-100">
+          <Icon icon="solar:folder-with-files-bold" width={15} />
         </span>
         <button type="button" onClick={() => api.toggleSub(sub.id)} className="min-w-0 flex-1 text-left">
-          <span className="truncate text-sm font-medium">{sub.nombre}</span>
+          <span className="truncate text-sm font-medium text-slate-800">{sub.nombre}</span>
         </button>
-        <span className="hidden shrink-0 font-mono text-xs text-muted-foreground tabular-nums sm:inline">
-          {sub.puestos.length} puestos
-        </span>
-        <RowActions onEdit={() => api.editarSub(sub)} onDelete={() => api.eliminarSub(sub)} />
+        <Contador n={sub.puestos.length} singular="puesto" plural="puestos" />
+        <RowActions tipo="sub-departamento" onEdit={() => api.editarSub(sub)} onDelete={() => api.eliminarSub(sub)} />
       </div>
 
       <ExpandRegion open={open}>
-        <div className="ml-[1.3rem] space-y-0.5 border-l border-dashed border-border pb-1 pl-4 pt-1">
+        <div className="ml-[1.35rem] space-y-0.5 border-l border-dashed border-slate-200 pb-1 pl-4 pt-1">
           {sub.puestos.map((p) => (
             <PuestoRow key={p.id} puesto={p} api={api} />
           ))}
@@ -333,17 +350,20 @@ function SubNode({ sub, api }: { sub: SubDepartamentoNodo; api: TreeApi }) {
 
 function PuestoRow({ puesto, api }: { puesto: PuestoNodo; api: TreeApi }) {
   return (
-    <div className="group flex items-center gap-2 rounded-md px-2 py-1.5 transition-colors hover:bg-muted/40">
-      <span className="grid h-6 w-6 shrink-0 place-items-center text-indigo-400">
-        <Briefcase className="h-3.5 w-3.5" />
+    <div className="group flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-slate-50">
+      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-violet-50 text-violet-500">
+        <Icon icon="solar:case-round-bold" width={14} />
       </span>
-      <span className="min-w-0 flex-1 truncate text-sm">{puesto.nombre}</span>
+      <span className="min-w-0 flex-1 truncate text-sm text-slate-700">{puesto.nombre}</span>
       {puesto.codigoBiotime != null && (
-        <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
-          bio {puesto.codigoBiotime}
+        <span
+          className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-slate-500"
+          title="Código del puesto en el reloj biométrico"
+        >
+          reloj {puesto.codigoBiotime}
         </span>
       )}
-      <RowActions onEdit={() => api.editarPuesto(puesto)} onDelete={() => api.eliminarPuesto(puesto)} />
+      <RowActions tipo="puesto" onEdit={() => api.editarPuesto(puesto)} onDelete={() => api.eliminarPuesto(puesto)} />
     </div>
   )
 }
@@ -361,26 +381,26 @@ function ExpandRegion({ open, children }: { open: boolean; children: React.React
   )
 }
 
-function RowActions({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => void }) {
+function RowActions({ tipo, onEdit, onDelete }: { tipo: string; onEdit: () => void; onDelete: () => void }) {
   return (
-    <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+    <div className="flex shrink-0 items-center gap-0.5 opacity-60 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
       <button
         type="button"
         onClick={onEdit}
-        title="Editar"
-        aria-label="Editar"
-        className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+        title={`Editar ${tipo}`}
+        aria-label={`Editar ${tipo}`}
+        className="grid h-8 w-8 place-items-center rounded-lg text-slate-500 transition-colors hover:bg-sky-50 hover:text-sky-600"
       >
-        <Pencil className="h-3.5 w-3.5" />
+        <Icon icon="solar:pen-bold" width={15} />
       </button>
       <button
         type="button"
         onClick={onDelete}
-        title="Eliminar"
-        aria-label="Eliminar"
-        className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+        title={`Eliminar ${tipo}`}
+        aria-label={`Eliminar ${tipo}`}
+        className="grid h-8 w-8 place-items-center rounded-lg text-slate-500 transition-colors hover:bg-rose-50 hover:text-rose-600"
       >
-        <Trash2 className="h-3.5 w-3.5" />
+        <Icon icon="solar:trash-bin-trash-bold" width={15} />
       </button>
     </div>
   )
@@ -391,35 +411,10 @@ function AddRow({ label, onClick }: { label: string; onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-indigo-50/60 hover:text-indigo-600"
+      className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-semibold text-sky-600 transition-colors hover:bg-sky-50 hover:text-sky-700"
     >
-      <Plus className="h-3.5 w-3.5" />
+      <Icon icon="solar:add-circle-linear" width={15} />
       Agregar {label}
     </button>
-  )
-}
-
-function EstadoVacio({
-  icon: Icon,
-  titulo,
-  detalle,
-  accion,
-}: {
-  icon: ComponentType<{ className?: string }>
-  titulo: string
-  detalle: string
-  accion?: React.ReactNode
-}) {
-  return (
-    <div className="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
-      <span className="grid h-12 w-12 place-items-center rounded-full bg-muted text-muted-foreground">
-        <Icon className="h-6 w-6" />
-      </span>
-      <div>
-        <p className="font-medium">{titulo}</p>
-        <p className="mx-auto max-w-sm text-sm text-muted-foreground">{detalle}</p>
-      </div>
-      {accion}
-    </div>
   )
 }

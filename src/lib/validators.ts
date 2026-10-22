@@ -359,6 +359,7 @@ export const empleadoCreateSchema = z
     profesion: optStr(100),
     titulo: optStr(60),
     forma_pago: reqStr('Selecciona la forma de pago'),
+    frecuencia_pago: z.enum(['QUINCENAL', 'MENSUAL'], { message: 'Selecciona la frecuencia de pago' }),
     codigo_banco: z.string().optional().or(z.literal('')),
     numero_cuenta: z.string().optional().or(z.literal('')),
     tipo_cuenta: z.string().optional().or(z.literal('')),
@@ -408,7 +409,7 @@ export const WIZARD_STEP_FIELDS: (keyof EmpleadoCreateValues)[][] = [
    'cantidad_hijos', 'tipo_discapacidad', 'telefono', 'correo', 'direccion', 'pasaporte'],
   ['pueblo_pertenencia', 'comunidad_linguistica', 'grupo_etnico', 'lugar_nacimiento_municipio', 'permiso_extranjero'],
   ['jornada', 'temporalidad_contrato', 'tipo_contrato', 'fecha_contratacion', 'fecha_reingreso',
-   'salario_base_contrato', 'profesion', 'titulo', 'forma_pago', 'codigo_banco', 'numero_cuenta', 'tipo_cuenta',
+   'salario_base_contrato', 'profesion', 'titulo', 'forma_pago', 'frecuencia_pago', 'codigo_banco', 'numero_cuenta', 'tipo_cuenta',
    'habilitar_horas_extra'],
   ['departamento_biotime', 'ubicacion_biometrico'],
 ]

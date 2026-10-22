@@ -122,31 +122,31 @@ export function EmpleadoCombobox({
         disabled={disabled}
         onClick={() => !disabled && setOpen((o) => !o)}
         className={cn(
-          'flex h-10 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
+          'flex h-10 w-full items-center justify-between gap-2 rounded-md border border-input bg-white px-3 py-2 text-sm text-slate-700 transition-colors duration-150 hover:border-slate-300 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:bg-slate-50 disabled:opacity-60',
         )}
       >
-        <span className={cn('line-clamp-1 text-left', isPlaceholder && 'text-muted-foreground')}>
+        <span className={cn('line-clamp-1 text-left', isPlaceholder && 'text-slate-400')}>
           {triggerText}
         </span>
-        <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
+        <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
       </button>
 
       {open && (
-        <div className="absolute z-50 mt-1 w-full overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md">
-          <div className="flex items-center gap-2 border-b px-3">
-            <Search className="h-4 w-4 shrink-0 opacity-50" />
+        <div className="absolute z-50 mt-1 w-full overflow-hidden rounded-xl border border-slate-200 bg-white text-slate-700 shadow-lg">
+          <div className="flex items-center gap-2 border-b border-slate-100 px-3">
+            <Search className="h-4 w-4 shrink-0 text-slate-400" />
             <input
               ref={inputRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={onKeyDown}
               placeholder={searchPlaceholder}
-              className="h-10 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+              className="h-10 w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
             />
           </div>
           <div className="max-h-60 overflow-y-auto p-1">
             {options.length === 0 ? (
-              <p className="px-2 py-6 text-center text-sm text-muted-foreground">{emptyLabel}</p>
+              <p className="px-2 py-6 text-center text-sm text-slate-400">{emptyLabel}</p>
             ) : (
               options.map((opt, i) => {
                 const isSelected = opt.id === value
@@ -158,13 +158,13 @@ export function EmpleadoCombobox({
                     onMouseEnter={() => setActiveIndex(i)}
                     onClick={() => commit(opt.id)}
                     className={cn(
-                      'relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-left text-sm outline-none',
-                      i === activeIndex && 'bg-accent text-accent-foreground',
+                      'relative flex w-full cursor-default select-none items-center rounded-md py-1.5 pl-8 pr-2 text-left text-sm outline-none',
+                      i === activeIndex && 'bg-sky-50 text-sky-700',
                     )}
                   >
                     {isSelected && (
                       <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
-                        <Check className="h-4 w-4" />
+                        <Check className="h-4 w-4 text-sky-500" />
                       </span>
                     )}
                     <span className="line-clamp-1">{opt.label}</span>

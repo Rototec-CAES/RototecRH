@@ -1,9 +1,9 @@
-import { Badge } from '@/components/ui/badge'
+import { Tag } from '@/shared/report/report-ui'
 import type { EstadoEmpleadoType } from '@/types'
 
 export function EmpleadoStatusBadge({ estado }: { estado: EstadoEmpleadoType }) {
   if (estado === 'ACTIVO') {
-    return <Badge variant="success">Activo</Badge>
+    return <Tag value="Activo" severity="success" icon="solar:check-circle-bold" />
   }
-  return <Badge variant="destructive">Baja</Badge>
+  return <Tag value="Baja" severity="danger" icon="solar:close-circle-bold" />
 }

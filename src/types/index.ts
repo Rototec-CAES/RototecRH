@@ -3,6 +3,8 @@ export type JornadaType = 'DIURNA' | 'NOCTURNA'
 export type SexoType = 'M' | 'F'
 export type EstadoCivilType = 'SOLTERO' | 'CASADO' | 'DIVORCIADO' | 'VIUDO' | 'UNION_LIBRE'
 export type FormaPagoType = 'TRANSFERENCIA' | 'CHEQUE'
+/** A qué planilla entra el colaborador. */
+export type FrecuenciaPagoType = 'QUINCENAL' | 'MENSUAL'
 export type TipoCuentaType = 'AHORRO' | 'MONETARIA'
 export type TemporalidadContratoType = 'INDEFINIDO' | 'TEMPORAL'
 export type TipoContratoType = 'PLANILLA' | 'SERVICIOS' | 'OTRO'
@@ -241,7 +243,7 @@ export interface VerificacionAsistencia {
   horarioAutorizado: boolean             // cumplió la meta → el horario programado es el oficial
   tipoDia: string                        // DIA | NOCHE | DESCANSO | ASUETO-D | ASUETO-N | AUSENTE
   horasEfectivas: number                 // horas que se le reconocen ese día
-  tipo: FuenteTurno                      // origen del turno
+  tipo: FuenteTurno | null               // origen del turno (null = marcó sin turno en ninguna fuente)
   ausenciaTipo: number | null            // tTiposAusencia.Id de la ausencia registrada ese día
   ausenciaNombre: string | null          // nombre del tipo ("Vacaciones", …)
   ausenciaEfecto: EfectoAusencia | null  // qué se le hizo al horario del día
@@ -605,6 +607,7 @@ export interface CreateEmpleadoInput {
   profesion?: string
   titulo?: string
   forma_pago: string
+  frecuencia_pago?: FrecuenciaPagoType
   codigo_banco?: string
   numero_cuenta?: string
   tipo_cuenta?: string
@@ -657,6 +660,8 @@ export interface EmpleadoBackend {
   temporalidadContrato: string | null
   tipoContrato: string | null
   formaPago: string | null
+  frecuenciaPago?: FrecuenciaPagoType | null
+  habilitarNomina?: boolean | null
   codigoBanco: string | null
   numeroCuenta: string | null
   tipoCuenta: string | null
@@ -943,4 +948,78 @@ export interface ReabrirResult {
   reseteados: number
   licenciaActiva: boolean
   venceLicencia: string | null
+}
+
+// ───────── Actualización masiva de empleados (Excel) ─────────
+
+/** Tipo de dato de una columna editable de la plantilla. */
+export type TipoCampoMasivo = 'texto' | 'numero' | 'fecha' | 'booleano' | 'catalogo' | 'banco' | 'referencia'
+
+/** Columna editable de la plantilla (GET /rrhh/empleados/actualizacion-masiva/plantilla). */
+export interface CampoActualizacionMasiva {
+  campo: string
+  etiqueta: string
+  tipo: TipoCampoMasivo
+  maxLength: number | null
+  valores: { valor: string; descripcion: string }[]
+  descripcion: string
+  ejemplo: string
+}
+
+export interface BancoCatalogoMasivo {
+  codigo: string
+  nombre: string
+  pais: string | null
+}
+
+/** Columnas, catálogo de bancos y una fila por empleado activo con sus valores actuales. */
+export interface PlantillaActualizacionMasiva {
+  campos: CampoActualizacionMasiva[]
+  bancos: BancoCatalogoMasivo[]
+  /** id (solo lectura) + un valor por campo editable. */
+  filas: Record<string, string | number | null>[]
+}
+
+/** Fila leída del Excel: llave = campo snake_case. Celda vacía = se omite (no cambia). */
+export interface FilaActualizacionMasiva {
+  fila?: number
+  id?: string | number
+  [campo: string]: string | number | boolean | undefined
+}
+
+export type ValorMasivo = string | number | boolean | null
+
+export interface CambioActualizacionMasiva {
+  campo: string
+  etiqueta: string
+  anterior: ValorMasivo
+  nuevo: ValorMasivo
+  /** Puesto / departamento: "ID - Nombre". */
+  anteriorTexto?: string | null
+  nuevoTexto?: string | null
+}
+
+export interface FilaValidadaMasiva {
+  fila: number | null
+  id: number | null
+  codigo: string | null
+  nombre: string | null
+  cambios: CambioActualizacionMasiva[]
+  errores: string[]
+}
+
+export interface ResultadoValidacionMasiva {
+  filas: FilaValidadaMasiva[]
+  resumen: {
+    total: number
+    conCambios: number
+    sinCambios: number
+    conErrores: number
+    totalCambios: number
+  }
+}
+
+export interface ResultadoAplicarMasiva {
+  actualizados: number
+  camposActualizados: number
 }

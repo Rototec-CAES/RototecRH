@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
+import { Icon } from '@iconify/react'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -71,7 +72,12 @@ export function BajaDialog({ open, onOpenChange, empleadoId, empleadoNombre }: P
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Dar de baja a {empleadoNombre}</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-rose-50 text-rose-600">
+              <Icon icon="solar:user-minus-bold" width={18} />
+            </span>
+            Dar de baja a {empleadoNombre}
+          </DialogTitle>
           <DialogDescription>
             Esta acción cambia el estado del empleado y queda registrada en su expediente.
           </DialogDescription>
@@ -96,7 +102,7 @@ export function BajaDialog({ open, onOpenChange, empleadoId, empleadoNombre }: P
               </SelectContent>
             </Select>
             {errors.tipoBaja && (
-              <p className="mt-1 text-xs text-destructive">{errors.tipoBaja.message}</p>
+              <p className="mt-1 text-xs text-red-600">{errors.tipoBaja.message}</p>
             )}
           </div>
 
@@ -104,15 +110,16 @@ export function BajaDialog({ open, onOpenChange, empleadoId, empleadoNombre }: P
             <Label className="mb-1.5 block">Fecha de baja *</Label>
             <Input type="date" {...form.register('fechaBaja')} />
             {errors.fechaBaja && (
-              <p className="mt-1 text-xs text-destructive">{errors.fechaBaja.message}</p>
+              <p className="mt-1 text-xs text-red-600">{errors.fechaBaja.message}</p>
             )}
           </div>
 
           <div>
             <Label className="mb-1.5 block">Motivo *</Label>
             <Textarea rows={4} placeholder="Descripción breve del motivo" {...form.register('motivoBaja')} />
+            <p className="mt-1 text-xs text-slate-400">Queda guardado en el expediente del empleado.</p>
             {errors.motivoBaja && (
-              <p className="mt-1 text-xs text-destructive">{errors.motivoBaja.message}</p>
+              <p className="mt-1 text-xs text-red-600">{errors.motivoBaja.message}</p>
             )}
           </div>
 
@@ -121,6 +128,7 @@ export function BajaDialog({ open, onOpenChange, empleadoId, empleadoNombre }: P
               Cancelar
             </Button>
             <Button type="submit" variant="destructive" disabled={darDeBaja.isPending}>
+              <Icon icon={darDeBaja.isPending ? 'svg-spinners:180-ring' : 'solar:user-minus-bold'} />
               {darDeBaja.isPending ? 'Guardando…' : 'Confirmar baja'}
             </Button>
           </DialogFooter>

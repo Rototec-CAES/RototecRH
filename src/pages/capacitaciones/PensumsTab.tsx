@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-react'
-import { toast } from '@/components/ui/sonner'
+import { Icon } from '@iconify/react'
 
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
 import {
   Dialog,
   DialogContent,
@@ -17,15 +15,18 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { NameCombobox } from '@/components/ui/name-combobox'
-import { Skeleton } from '@/components/ui/skeleton'
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
+  DataTable,
+  DataTableBody,
+  DataTableCell,
+  DataTableEmpty,
+  DataTableHead,
+  DataTableHeadCell,
+  DataTableRow,
+  DataTableSkeleton,
+} from '@/components/shared/DataTable'
+import { TableResultCount, TableSearch, TableToolbar } from '@/components/shared/TableToolbar'
+import { confirmar } from '@/components/shared/ConfirmDialog'
 import {
   useCreatePensum,
   useDeletePensum,
@@ -33,9 +34,12 @@ import {
   useUpdatePensum,
 } from '@/hooks/useCapacitaciones'
 import { usePuestoOptions } from '@/hooks/usePuestoOptions'
+import { notify } from '@/lib/notify'
 import { pensumSchema, type PensumFormValues } from '@/lib/validators'
 import type { Pensum, PensumInput } from '@/types'
 import { PensumEditor } from './PensumEditor'
+
+const TID = 'rh-capacitaciones'
 
 const norm = (s: string) =>
   s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
@@ -65,31 +69,32 @@ export default function PensumsTab() {
     setFormOpen(true)
   }
   async function onDelete(p: Pensum) {
-    if (!window.confirm(`¿Eliminar el pensum "${p.nombre}"?`)) return
+    const ok = await confirmar({
+      titulo: `¿Eliminar el pensum "${p.nombre}"?`,
+      textoConfirmar: 'Eliminar',
+      peligro: true,
+    })
+    if (!ok) return
     try {
       await deleteMut.mutateAsync(p.id)
-      toast.success('Pensum eliminado')
+      notify('success', 'Pensum eliminado')
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Error al eliminar')
+      notify('error', 'No se pudo eliminar', err instanceof Error ? err.message : 'Error al eliminar')
     }
   }
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative sm:w-64">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            className="pl-9"
-            placeholder="Buscar por nombre"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <div className="flex items-center gap-3">
-          <p className="text-sm text-muted-foreground">
-            {filtered.length} pensum{filtered.length === 1 ? '' : 's'}
-          </p>
+      <TableToolbar className="justify-between">
+        <TableSearch
+          value={search}
+          onChange={setSearch}
+          placeholder="Buscar pensum por nombre"
+          className="w-full sm:w-72"
+          testId={`${TID}__filtro-busqueda-pensum`}
+        />
+        <div className="flex items-center gap-2">
+          <TableResultCount total={pensums.length} filtered={filtered.length} label="pensum" />
           <Button
             variant="outline"
             size="icon"
@@ -98,78 +103,79 @@ export default function PensumsTab() {
             title="Actualizar"
             disabled={isFetching}
           >
-            <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
+            <Icon icon={isFetching ? 'svg-spinners:180-ring' : 'solar:refresh-bold'} width={16} />
           </Button>
-          <Button onClick={openCreate}>
-            <Plus className="h-4 w-4" />
+          <Button onClick={openCreate} data-testid={`${TID}__btn-nuevo-pensum`}>
+            <Icon icon="solar:add-circle-bold" width={16} />
             Nuevo pensum
           </Button>
         </div>
-      </div>
+      </TableToolbar>
 
-      <Card>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Nombre</TableHead>
-              <TableHead>Puesto</TableHead>
-              <TableHead className="w-44 text-right">Acciones</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              Array.from({ length: 4 }).map((_, i) => (
-                <TableRow key={i}>
-                  <TableCell colSpan={3}>
-                    <Skeleton className="h-6 w-full" />
-                  </TableCell>
-                </TableRow>
-              ))
-            ) : isError ? (
-              <TableRow>
-                <TableCell colSpan={3} className="text-center text-destructive">
-                  Error al cargar pensums
-                </TableCell>
-              </TableRow>
-            ) : filtered.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={3} className="py-10 text-center text-muted-foreground">
-                  {search ? 'Sin resultados para la búsqueda' : 'Sin pensums en el catálogo'}
-                </TableCell>
-              </TableRow>
-            ) : (
-              filtered.map((p) => (
-                <TableRow
-                  key={p.id}
-                  className="cursor-pointer"
-                  onClick={() => setEditorId(p.id)}
-                >
-                  <TableCell className="font-medium">{p.nombre}</TableCell>
-                  <TableCell>
-                    {p.puesto ?? <span className="text-xs text-muted-foreground">—</span>}
-                  </TableCell>
-                  <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex justify-end gap-1">
-                      <Button variant="ghost" size="sm" onClick={() => openEdit(p)}>
-                        <Pencil className="h-4 w-4" />
-                        Editar
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => onDelete(p)}
-                        disabled={deleteMut.isPending}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </Card>
+      <p className="flex items-center gap-1.5 text-xs text-slate-500">
+        <Icon icon="solar:info-circle-linear" width={14} />
+        Haz clic en un pensum para editar sus módulos y evaluaciones.
+      </p>
+
+      <DataTable>
+        <DataTableHead>
+          <DataTableHeadCell>Nombre</DataTableHeadCell>
+          <DataTableHeadCell>Puesto</DataTableHeadCell>
+          <DataTableHeadCell className="w-48 text-right">Acciones</DataTableHeadCell>
+        </DataTableHead>
+        <DataTableBody>
+          {isLoading ? (
+            <DataTableSkeleton rows={4} cols={3} />
+          ) : isError ? (
+            <DataTableEmpty
+              icon="solar:danger-triangle-bold"
+              title="No se pudieron cargar los pensums"
+              description="Revisa la conexión y presiona el botón Actualizar."
+              colSpan={3}
+            />
+          ) : filtered.length === 0 ? (
+            <DataTableEmpty
+              icon="solar:book-bookmark-bold"
+              title={search ? 'Ningún pensum coincide con la búsqueda' : 'Aún no hay pensums'}
+              description={search ? 'Prueba con otro nombre.' : 'Crea el primero con el botón Nuevo pensum.'}
+              colSpan={3}
+            />
+          ) : (
+            filtered.map((p) => (
+              <DataTableRow key={p.id} onClick={() => setEditorId(p.id)}>
+                <DataTableCell className="font-medium text-slate-900">
+                  <span className="flex items-center gap-2">
+                    <Icon icon="solar:book-bookmark-bold" width={16} className="shrink-0 text-sky-500" />
+                    {p.nombre}
+                  </span>
+                </DataTableCell>
+                <DataTableCell className="text-slate-600">
+                  {p.puesto ?? <span className="text-xs text-slate-400">—</span>}
+                </DataTableCell>
+                <DataTableCell className="text-right">
+                  <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                    <Button variant="ghost" size="sm" onClick={() => openEdit(p)} title="Cambiar nombre o puesto">
+                      <Icon icon="solar:pen-bold" width={15} />
+                      Editar
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onDelete(p)}
+                      disabled={deleteMut.isPending}
+                      title="Eliminar pensum"
+                      aria-label="Eliminar pensum"
+                      className="hover:bg-rose-50 hover:text-rose-600"
+                    >
+                      <Icon icon="solar:trash-bin-trash-bold" width={15} />
+                    </Button>
+                  </div>
+                </DataTableCell>
+              </DataTableRow>
+            ))
+          )}
+        </DataTableBody>
+      </DataTable>
 
       <PensumFormDialog
         open={formOpen}
@@ -235,14 +241,14 @@ function PensumFormDialog({
     try {
       if (mode === 'create') {
         await createMut.mutateAsync(input)
-        toast.success('Pensum creado')
+        notify('success', 'Pensum creado')
       } else if (pensum) {
         await updateMut.mutateAsync(input)
-        toast.success('Pensum actualizado')
+        notify('success', 'Pensum actualizado')
       }
       onOpenChange(false)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Error al guardar')
+      notify('error', 'No se pudo guardar', err instanceof Error ? err.message : 'Error al guardar')
     }
   }
 
@@ -254,21 +260,23 @@ function PensumFormDialog({
         <DialogHeader>
           <DialogTitle>{mode === 'create' ? 'Nuevo pensum' : 'Editar pensum'}</DialogTitle>
           <DialogDescription>
-            Define el nombre y, opcionalmente, el puesto asociado.
+            Ponle un nombre y elige el puesto al que corresponde.
           </DialogDescription>
         </DialogHeader>
 
         <form className="space-y-4" onSubmit={form.handleSubmit(onSubmit)}>
           <div>
-            <Label className="mb-1.5 block">Nombre *</Label>
+            <Label className="mb-1.5 block text-xs font-semibold text-slate-600">
+              Nombre <span className="text-rose-500">*</span>
+            </Label>
             <Input placeholder="Ej: Inducción operario" {...form.register('nombre')} />
             {errors.nombre && (
-              <p className="mt-1 text-xs text-destructive">{errors.nombre.message}</p>
+              <p className="mt-1 text-xs text-red-600">{errors.nombre.message}</p>
             )}
           </div>
           <div>
-            <Label className="mb-1.5 block">
-              Puesto <span className="text-destructive">*</span>
+            <Label className="mb-1.5 block text-xs font-semibold text-slate-600">
+              Puesto <span className="text-rose-500">*</span>
             </Label>
             <NameCombobox
               options={puestoOptions}
@@ -282,7 +290,7 @@ function PensumFormDialog({
               disabled={puestosLoading}
             />
             {errors.idPuesto && (
-              <p className="mt-1 text-xs text-destructive">{errors.idPuesto.message}</p>
+              <p className="mt-1 text-xs text-red-600">{errors.idPuesto.message}</p>
             )}
           </div>
 
@@ -290,7 +298,8 @@ function PensumFormDialog({
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
+            <Button type="submit" disabled={isSubmitting} data-testid={`${TID}__btn-guardar-pensum`}>
+              <Icon icon={isSubmitting ? 'svg-spinners:180-ring' : 'solar:check-circle-bold'} width={16} />
               {isSubmitting ? 'Guardando…' : mode === 'create' ? 'Crear pensum' : 'Guardar'}
             </Button>
           </DialogFooter>

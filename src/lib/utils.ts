@@ -186,3 +186,8 @@ export function calcularHorasPlanificadas(
 export function umbralHorasExtras(tipo: 'DIURNO' | 'NOCTURNO'): number {
   return tipo === 'DIURNO' ? 44 : 36
 }
+
+/** Iniciales para avatares: "Jaime" + "López" → "JL". */
+export function getInitials(nombre?: string | null, apellido?: string | null): string {
+  return `${(nombre ?? '').trim().charAt(0)}${(apellido ?? '').trim().charAt(0)}`.toUpperCase() || '·'
+}

@@ -1,4 +1,5 @@
 import type {
+  BancosNomina,
   DescuentoEmpleado,
   DescuentoEmpleadoInput,
   DescuentoEmpleadoParche,
@@ -48,6 +49,14 @@ export const nominaApi = {
   },
   async actualizarParametro(clave: string, valor: number): Promise<ParametroNomina[]> {
     const { data } = await api.put<ParametroNomina[]>(`/planillas/parametros/${clave}`, { valor })
+    return data
+  },
+  async bancos(): Promise<BancosNomina> {
+    const { data } = await api.get<BancosNomina>('/planillas/bancos')
+    return data
+  },
+  async guardarEquivalenciaBanco(codigo: string, idBanco: number | null): Promise<BancosNomina> {
+    const { data } = await api.put<BancosNomina>(`/planillas/bancos/equivalencias/${encodeURIComponent(codigo)}`, { idBanco })
     return data
   },
   async descuentos(params: { empresaId?: number; idEmpleado?: number; activos?: boolean }): Promise<DescuentoEmpleado[]> {

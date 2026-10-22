@@ -1,12 +1,55 @@
-import { useRef, useState } from 'react'
-import { Check, Download, Loader2, Upload } from 'lucide-react'
+import { useRef, useState, type ReactNode } from 'react'
+import { Icon } from '@iconify/react'
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { PageHeader } from '@/components/shared/PageHeader'
+import { FieldLabel, FilterCard, Segmented } from '@/shared/report/report-ui'
 import { cn } from '@/lib/utils'
 import { cargaTurnosApi } from '@/api/cargaTurnos'
 import type { PreviewTurnos } from '@/types'
 import PreviewTurnosDialog from './PreviewTurnosDialog'
+
+const TID = 'rh-carga-turnos'
+
+const AREAS: { value: '1' | '2' | '3'; label: string }[] = [
+  { value: '1', label: 'Acabados' },
+  { value: '2', label: 'Máquinas' },
+  { value: '3', label: 'General' },
+]
+
+function Paso({
+  n,
+  titulo,
+  descripcion,
+  listo,
+  children,
+}: {
+  n: number
+  titulo: string
+  descripcion: string
+  listo?: boolean
+  children: ReactNode
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="mb-4 flex items-start gap-3">
+        <span
+          className={cn(
+            'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold',
+            listo ? 'bg-emerald-500 text-white' : 'bg-slate-900 text-white',
+          )}
+        >
+          {listo ? <Icon icon="solar:check-read-linear" width={16} /> : n}
+        </span>
+        <div>
+          <h2 className="text-base font-semibold text-slate-900">{titulo}</h2>
+          <p className="mt-0.5 text-xs text-slate-500">{descripcion}</p>
+        </div>
+      </div>
+      {children}
+    </div>
+  )
+}
 
 export default function CargaTurnosPage() {
   const [desde, setDesde] = useState('')
@@ -17,6 +60,7 @@ export default function CargaTurnosPage() {
   const [cargando, setCargando] = useState(false)
   const [aplicando, setAplicando] = useState(false)
   const [resultado, setResultado] = useState<{ acabados: number; maquinas: number; generales: number; avisos: number } | null>(null)
+  const [arrastrando, setArrastrando] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const rangoOk = Boolean(desde && hasta && desde <= hasta)
@@ -63,61 +107,131 @@ export default function CargaTurnosPage() {
     }
   }
 
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <div className="rounded-xl bg-gradient-to-br from-teal-500/20 to-violet-500/20 p-2.5 ring-1 ring-border">
-          <Upload className="h-5 w-5" />
-        </div>
-        <div>
-          <h1 className="text-lg font-semibold leading-none tracking-tight">Carga de turnos</h1>
-          <p className="mt-1 text-xs text-muted-foreground">Genera la plantilla, llénala y súbela · el sistema se infiere de los días</p>
-        </div>
-      </div>
+  const subidaHabilitada = rangoOk && !cargando
 
-      <Card className="p-3">
-        <div className="flex flex-wrap items-end gap-3">
-          <div>
-            <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Desde</label>
-            <Input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} className="h-9 w-40" />
+  return (
+    <div className="space-y-5">
+      <FilterCard>
+        <PageHeader
+          icono="solar:upload-square-bold"
+          titulo="Carga de turnos"
+          descripcion="Programa los turnos de varios empleados a la vez: elige el período, descarga la plantilla de Excel, llénala y súbela. El sistema se infiere de los días."
+        />
+      </FilterCard>
+
+      {resultado && (
+        <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          <Icon icon="solar:check-circle-bold" width={18} className="text-emerald-600" />
+          <span className="font-semibold">Turnos aplicados:</span>
+          <span className="tabular-nums">
+            <b>{resultado.acabados}</b> acabados · <b>{resultado.maquinas}</b> máquinas · <b>{resultado.generales}</b> generales · {resultado.avisos} avisos
+          </span>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+        <Paso n={1} titulo="Período y área" descripcion="Fechas que cubre la plantilla y a qué área pertenecen los turnos." listo={rangoOk}>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <FieldLabel htmlFor={`${TID}-desde`}>Desde</FieldLabel>
+                <Input
+                  id={`${TID}-desde`}
+                  type="date"
+                  value={desde}
+                  onChange={(e) => setDesde(e.target.value)}
+                  data-testid={`${TID}__desde`}
+                />
+              </div>
+              <div>
+                <FieldLabel htmlFor={`${TID}-hasta`}>Hasta</FieldLabel>
+                <Input
+                  id={`${TID}-hasta`}
+                  type="date"
+                  value={hasta}
+                  onChange={(e) => setHasta(e.target.value)}
+                  data-testid={`${TID}__hasta`}
+                />
+              </div>
+            </div>
+            {desde && hasta && desde > hasta && (
+              <p className="flex items-center gap-1.5 text-xs text-red-600">
+                <Icon icon="solar:danger-triangle-bold" width={14} />
+                La fecha «Desde» no puede ser posterior a «Hasta».
+              </p>
+            )}
+            <div>
+              <FieldLabel>Área</FieldLabel>
+              <Segmented<'1' | '2' | '3'>
+                value={String(area) as '1' | '2' | '3'}
+                onChange={(v) => setArea(Number(v) as 1 | 2 | 3)}
+                options={AREAS}
+                testId={`${TID}__area`}
+              />
+            </div>
           </div>
-          <div>
-            <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Hasta</label>
-            <Input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} className="h-9 w-40" />
+        </Paso>
+
+        <Paso n={2} titulo="Descargar plantilla" descripcion="Excel con los empleados y los días del período, listo para llenar.">
+          <div className="flex h-full flex-col gap-3">
+            <Button
+              onClick={descargar}
+              disabled={!rangoOk}
+              className="w-full bg-emerald-600 text-white hover:bg-emerald-700"
+              data-testid={`${TID}__btn-plantilla`}
+            >
+              <Icon icon="solar:file-download-bold" width={16} />
+              Descargar plantilla
+            </Button>
+            {!rangoOk && (
+              <p className="text-xs text-slate-400">Primero elige el período en el paso 1.</p>
+            )}
           </div>
-          <div role="group" aria-label="Área" className="inline-flex items-center gap-1 rounded-lg border bg-muted/40 p-1">
-            <button
-              type="button"
-              aria-pressed={area === 1}
-              onClick={() => setArea(1)}
-              className={cn('h-7 rounded-md px-3 text-xs font-medium', area === 1 ? 'bg-violet-600 text-white shadow-sm' : 'text-muted-foreground')}
-            >
-              Acabados
-            </button>
-            <button
-              type="button"
-              aria-pressed={area === 2}
-              onClick={() => setArea(2)}
-              className={cn('h-7 rounded-md px-3 text-xs font-medium', area === 2 ? 'bg-teal-600 text-white shadow-sm' : 'text-muted-foreground')}
-            >
-              Máquinas
-            </button>
-            <button
-              type="button"
-              aria-pressed={area === 3}
-              onClick={() => setArea(3)}
-              className={cn('h-7 rounded-md px-3 text-xs font-medium', area === 3 ? 'bg-indigo-600 text-white shadow-sm' : 'text-muted-foreground')}
-            >
-              General
-            </button>
-          </div>
-          <Button onClick={descargar} disabled={!rangoOk} variant="outline" className="h-9 gap-2">
-            <Download className="h-4 w-4" /> Descargar plantilla
-          </Button>
-          <Button onClick={() => fileRef.current?.click()} disabled={!rangoOk || cargando} className="h-9 gap-2">
-            {cargando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-            {cargando ? 'Leyendo…' : 'Subir Excel'}
-          </Button>
+        </Paso>
+
+        <Paso n={3} titulo="Subir Excel lleno" descripcion="Antes de guardar verás una vista previa para revisar los turnos.">
+          <button
+            type="button"
+            disabled={!subidaHabilitada}
+            onClick={() => fileRef.current?.click()}
+            onDragOver={(e) => {
+              if (!subidaHabilitada) return
+              e.preventDefault()
+              setArrastrando(true)
+            }}
+            onDragLeave={() => setArrastrando(false)}
+            onDrop={(e) => {
+              e.preventDefault()
+              setArrastrando(false)
+              const f = e.dataTransfer.files?.[0]
+              if (subidaHabilitada && f) onArchivo(f)
+            }}
+            data-testid={`${TID}__zona-subida`}
+            className={cn(
+              'flex w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-6 text-center transition-colors',
+              'disabled:cursor-not-allowed disabled:opacity-50',
+              arrastrando ? 'border-sky-400 bg-sky-50' : 'border-slate-200 bg-slate-50 hover:border-sky-300 hover:bg-sky-50/50',
+            )}
+          >
+            <Icon
+              icon={cargando ? 'svg-spinners:180-ring' : 'solar:upload-square-bold'}
+              width={28}
+              className={cargando ? 'text-sky-500' : 'text-slate-400'}
+            />
+            <span className="text-sm font-semibold text-slate-700">
+              {cargando ? 'Leyendo archivo…' : 'Haz clic o arrastra el Excel aquí'}
+            </span>
+            <span className="text-xs text-slate-400">
+              {archivo ? (
+                <span className="inline-flex items-center gap-1 font-medium text-slate-600">
+                  <Icon icon="solar:file-text-bold" width={13} />
+                  {archivo.name}
+                </span>
+              ) : (
+                'Solo archivos .xlsx'
+              )}
+            </span>
+          </button>
           <input
             ref={fileRef}
             type="file"
@@ -125,14 +239,8 @@ export default function CargaTurnosPage() {
             className="hidden"
             onChange={(e) => e.target.files?.[0] && onArchivo(e.target.files[0])}
           />
-        </div>
-        {resultado && (
-          <div className="mt-3 flex items-center gap-2 rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-            <Check className="h-4 w-4" />
-            Aplicado: <b>{resultado.acabados}</b> acabados · <b>{resultado.maquinas}</b> máquinas · <b>{resultado.generales}</b> generales · {resultado.avisos} avisos
-          </div>
-        )}
-      </Card>
+        </Paso>
+      </div>
 
       <PreviewTurnosDialog
         open={!!preview}

@@ -1,10 +1,8 @@
 import { useMemo, useState } from 'react'
-import { Plus } from 'lucide-react'
+import { Icon } from '@iconify/react'
 import { toast } from 'sonner'
 
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
   Dialog,
@@ -33,6 +31,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { EmptyState } from '@/components/shared/DataTable'
+import { TableResultCount } from '@/components/shared/TableToolbar'
+import { Panel, Tag } from '@/shared/report/report-ui'
 import { extractApiErrorMessage } from '@/api/client'
 import { useEmpleadosBackendList } from '@/hooks/useEmpleados'
 import {
@@ -44,6 +45,8 @@ import { formatDate, formatQ } from '@/lib/utils'
 import type { EmpleadoBackend } from '@/types'
 import type { DescuentoEmpleado, TipoDescuento } from '@/types/nomina'
 import { EditableCell } from './EditableCell'
+
+const TID = 'rh-planilla-descuentos'
 
 function nombreEmpleado(e: EmpleadoBackend): string {
   const apellidos = [e.primerApellido, e.segundoApellido, e.apellidoCasada].filter(Boolean).join(' ') || (e.apellido ?? '')
@@ -70,31 +73,39 @@ export function DescuentosTab({ empresaId }: { empresaId: number }) {
 
   return (
     <div className="space-y-4">
-      <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
-        <div>
-          <p className="font-semibold">Préstamos y embargos</p>
-          <p className="text-xs text-muted-foreground">
-            La cuota se descuenta sola en cada planilla generada y el saldo baja al cerrarla. Anticipos y
-            otros descuentos puntuales se capturan directo en la planilla.
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <label className="flex items-center gap-2 text-sm">
-            <Checkbox checked={soloActivos} onCheckedChange={(v) => setSoloActivos(v === true)} />
-            Solo activos
-          </label>
-          <Button onClick={() => setNuevo(true)}>
-            <Plus className="h-4 w-4" />
-            Nuevo
-          </Button>
-        </div>
-      </Card>
-
-      <Card className="overflow-x-auto">
+      <Panel
+        flush
+        icon="solar:hand-money-bold"
+        title="Préstamos y embargos"
+        subtitle="La cuota se descuenta sola en cada planilla generada y el saldo baja al cerrarla. Anticipos y otros descuentos puntuales se capturan directo en la planilla."
+        right={
+          <div className="flex flex-wrap items-center gap-3">
+            {data && <TableResultCount total={data.length} label="registro" />}
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+              <Checkbox
+                checked={soloActivos}
+                onCheckedChange={(v) => setSoloActivos(v === true)}
+                data-testid={`${TID}__filtro-activos`}
+              />
+              Solo activos
+            </label>
+            <Button onClick={() => setNuevo(true)} data-testid={`${TID}__btn-nuevo`}>
+              <Icon icon="solar:add-circle-bold" width={16} />
+              Nuevo
+            </Button>
+          </div>
+        }
+      >
         {isLoading ? (
-          <Skeleton className="h-40 w-full" />
+          <div className="p-5">
+            <Skeleton className="h-40 w-full" />
+          </div>
         ) : !data?.length ? (
-          <p className="p-8 text-center text-sm text-muted-foreground">No hay préstamos ni embargos registrados.</p>
+          <EmptyState
+            icon="solar:hand-money-bold"
+            title="No hay préstamos ni embargos registrados"
+            description="Usa el botón «Nuevo» para registrar uno."
+          />
         ) : (
           <Table className="text-xs">
             <TableHeader>
@@ -104,7 +115,7 @@ export function DescuentosTab({ empresaId }: { empresaId: number }) {
                 <TableHead>Descripción</TableHead>
                 <TableHead>Desde</TableHead>
                 <TableHead className="text-right">Monto total</TableHead>
-                <TableHead className="text-right">Cuota quincenal</TableHead>
+                <TableHead className="text-right">Cuota por planilla</TableHead>
                 <TableHead className="text-right">Saldo</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead />
@@ -114,14 +125,16 @@ export function DescuentosTab({ empresaId }: { empresaId: number }) {
               {data.map((d) => (
                 <TableRow key={d.id}>
                   <TableCell>
-                    <p className="font-medium">{d.empleado}</p>
-                    <p className="text-[10px] text-muted-foreground">{d.codigo}</p>
+                    <p className="font-semibold text-slate-800">{d.empleado}</p>
+                    <p className="text-[10px] text-slate-500">{d.codigo}</p>
                   </TableCell>
-                  <TableCell>{TIPO_LABEL[d.tipo]}</TableCell>
+                  <TableCell>
+                    <Tag value={TIPO_LABEL[d.tipo]} severity={d.tipo === 'EMBARGO' ? 'danger' : 'info'} />
+                  </TableCell>
                   <TableCell>{d.descripcion ?? '—'}</TableCell>
-                  <TableCell>{formatDate(d.fechaInicio)}</TableCell>
+                  <TableCell className="tabular-nums">{formatDate(d.fechaInicio)}</TableCell>
                   <TableCell className="text-right tabular-nums">
-                    {d.montoTotal === null ? 'Indefinido' : formatQ(d.montoTotal)}
+                    {d.montoTotal === null ? <span className="text-slate-500">Indefinido</span> : formatQ(d.montoTotal)}
                   </TableCell>
                   <TableCell className="w-28 text-right">
                     <EditableCell
@@ -130,12 +143,20 @@ export function DescuentosTab({ empresaId }: { empresaId: number }) {
                       disabled={!d.activo}
                     />
                   </TableCell>
-                  <TableCell className="text-right tabular-nums">{d.saldo === null ? '—' : formatQ(d.saldo)}</TableCell>
-                  <TableCell>
-                    <Badge variant={d.activo ? 'success' : 'secondary'}>{d.activo ? 'Activo' : 'Inactivo'}</Badge>
+                  <TableCell className="text-right font-semibold tabular-nums text-slate-900">
+                    {d.saldo === null ? '—' : formatQ(d.saldo)}
                   </TableCell>
                   <TableCell>
-                    <Button size="sm" variant="ghost" onClick={() => onActualizar(d, { activo: !d.activo })}>
+                    <Tag value={d.activo ? 'Activo' : 'Inactivo'} severity={d.activo ? 'success' : 'secondary'} />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => onActualizar(d, { activo: !d.activo })}
+                      className={d.activo ? 'text-rose-600 hover:bg-rose-50 hover:text-rose-700' : 'text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700'}
+                    >
+                      <Icon icon={d.activo ? 'solar:pause-circle-linear' : 'solar:play-circle-linear'} width={15} />
                       {d.activo ? 'Desactivar' : 'Activar'}
                     </Button>
                   </TableCell>
@@ -144,7 +165,7 @@ export function DescuentosTab({ empresaId }: { empresaId: number }) {
             </TableBody>
           </Table>
         )}
-      </Card>
+      </Panel>
 
       <NuevoDescuentoDialog open={nuevo} onOpenChange={setNuevo} empresaId={empresaId} />
     </div>
@@ -209,21 +230,26 @@ function NuevoDescuentoDialog({
     }
   }
 
+  const lbl = 'text-xs font-semibold text-slate-600'
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Nuevo préstamo o embargo</DialogTitle>
-          <DialogDescription>Se descuenta desde la primera planilla cuya quincena termine después de la fecha de inicio.</DialogDescription>
+          <DialogTitle className="flex items-center gap-2">
+            <Icon icon="solar:hand-money-bold" width={20} className="text-sky-500" />
+            Nuevo préstamo o embargo
+          </DialogTitle>
+          <DialogDescription>Se descuenta en cada planilla (quincenal o mensual, según el colaborador) desde la primera cuyo período termine después de la fecha de inicio.</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1">
-            <Label className="text-xs">Colaborador</Label>
+            <Label className={lbl}>Colaborador</Label>
             <EmpleadoCombobox empleados={opciones} value={idEmpleado} onChange={setIdEmpleado} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label className="text-xs">Tipo</Label>
+              <Label className={lbl}>Tipo</Label>
               <Select value={tipo} onValueChange={(v) => setTipo(v as TipoDescuento)}>
                 <SelectTrigger>
                   <SelectValue />
@@ -235,20 +261,20 @@ function NuevoDescuentoDialog({
               </Select>
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Fecha de inicio</Label>
+              <Label className={lbl}>Fecha de inicio</Label>
               <Input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Monto total (vacío = indefinido)</Label>
+              <Label className={lbl}>Monto total (vacío = indefinido)</Label>
               <Input type="number" min={0} step="0.01" value={montoTotal} onChange={(e) => setMontoTotal(e.target.value)} />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Cuota por quincena</Label>
+              <Label className={lbl}>Cuota por planilla</Label>
               <Input type="number" min={0} step="0.01" value={cuota} onChange={(e) => setCuota(e.target.value)} />
             </div>
           </div>
           <div className="space-y-1">
-            <Label className="text-xs">Descripción</Label>
+            <Label className={lbl}>Descripción</Label>
             <Input value={descripcion} maxLength={200} onChange={(e) => setDescripcion(e.target.value)} />
           </div>
         </div>
@@ -257,6 +283,7 @@ function NuevoDescuentoDialog({
             Cancelar
           </Button>
           <Button onClick={onGuardar} disabled={crear.isPending}>
+            <Icon icon={crear.isPending ? 'svg-spinners:180-ring' : 'solar:diskette-bold'} width={16} />
             Guardar
           </Button>
         </DialogFooter>

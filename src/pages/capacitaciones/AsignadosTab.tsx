@@ -1,9 +1,7 @@
 import { useMemo, useState } from 'react'
-import { RefreshCw, Search } from 'lucide-react'
+import { Icon } from '@iconify/react'
 
-import { Badge } from '@/components/ui/badge'
-import { Card } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
 import {
   Select,
   SelectContent,
@@ -11,25 +9,30 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Skeleton } from '@/components/ui/skeleton'
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
+  DataTable,
+  DataTableBody,
+  DataTableCell,
+  DataTableEmpty,
+  DataTableHead,
+  DataTableHeadCell,
+  DataTableRow,
+  DataTableSkeleton,
+} from '@/components/shared/DataTable'
+import { TableResultCount, TableSearch } from '@/components/shared/TableToolbar'
+import { FieldLabel, Tag } from '@/shared/report/report-ui'
 import { useEmpleadosCap } from '@/hooks/useCapacitaciones'
 import { usePuestoOptions, useDepartamentoOptions } from '@/hooks/usePuestoOptions'
 import { NameCombobox } from '@/components/ui/name-combobox'
 import type { EmpleadoCapResumen } from '@/types'
 import { EmpleadoCapDetailSheet } from './EmpleadoCapDetailSheet'
 
+const TID = 'rh-capacitaciones'
+
 function licenciaBadge(estado: 'activa' | 'expirada' | 'sin_licencia') {
-  if (estado === 'activa') return <Badge variant="success">Licencia activa</Badge>
-  if (estado === 'expirada') return <Badge variant="destructive">Licencia expirada</Badge>
-  return <Badge variant="outline">Sin licencia</Badge>
+  if (estado === 'activa') return <Tag severity="success" icon="solar:shield-check-bold" value="Licencia activa" />
+  if (estado === 'expirada') return <Tag severity="danger" icon="solar:shield-warning-bold" value="Licencia expirada" />
+  return <Tag severity="secondary" value="Sin licencia" />
 }
 
 const norm = (s: string) =>
@@ -69,116 +72,114 @@ export default function AsignadosTab() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:flex-wrap">
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-muted-foreground">Puesto</label>
-          <NameCombobox
-            options={puestoOptions}
-            value={puestoId}
-            onChange={setPuestoId}
-            placeholder="Todos los puestos"
-            allowAll
-            allLabel="Todos los puestos"
-            className="sm:w-52"
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-muted-foreground">Departamento</label>
-          <NameCombobox
-            options={deptoOptions}
-            value={departamentoId}
-            onChange={setDepartamentoId}
-            placeholder="Todos los departamentos"
-            allowAll
-            allLabel="Todos los departamentos"
-            className="sm:w-56"
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-muted-foreground">Estado</label>
-          <Select value={estado} onValueChange={(v) => setEstado(v as typeof estado)}>
-            <SelectTrigger className="sm:w-36">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Todos</SelectItem>
-              <SelectItem value="activo">Activos</SelectItem>
-              <SelectItem value="inactivo">Inactivos</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-muted-foreground">Buscar empleado</label>
-          <div className="relative sm:w-52">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Nombre del empleado"
-              className="pl-8"
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+          <div>
+            <FieldLabel>Puesto</FieldLabel>
+            <NameCombobox
+              options={puestoOptions}
+              value={puestoId}
+              onChange={setPuestoId}
+              placeholder="Todos los puestos"
+              allowAll
+              allLabel="Todos los puestos"
+              className="sm:w-52"
             />
           </div>
-        </div>
-        <div className="flex flex-col gap-1 sm:mt-5">
-          <button
-            type="button"
-            onClick={() => refetch()}
-            aria-label="Actualizar"
-            title="Actualizar"
-            disabled={isFetching}
-            className="inline-flex items-center justify-center h-8 w-8 rounded-md border border-input bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
-          >
-            <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
-          </button>
+          <div>
+            <FieldLabel>Departamento</FieldLabel>
+            <NameCombobox
+              options={deptoOptions}
+              value={departamentoId}
+              onChange={setDepartamentoId}
+              placeholder="Todos los departamentos"
+              allowAll
+              allLabel="Todos los departamentos"
+              className="sm:w-56"
+            />
+          </div>
+          <div>
+            <FieldLabel>Estado</FieldLabel>
+            <Select value={estado} onValueChange={(v) => setEstado(v as typeof estado)}>
+              <SelectTrigger className="sm:w-36" data-testid={`${TID}__filtro-estado`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos</SelectItem>
+                <SelectItem value="activo">Activos</SelectItem>
+                <SelectItem value="inactivo">Inactivos</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <FieldLabel>Buscar empleado</FieldLabel>
+            <TableSearch
+              value={search}
+              onChange={setSearch}
+              placeholder="Nombre del empleado"
+              className="sm:w-60"
+              testId={`${TID}__filtro-busqueda-asignados`}
+            />
+          </div>
+          <div className="flex items-center gap-2 sm:ml-auto">
+            <TableResultCount total={(data ?? []).length} filtered={empleados.length} label="empleado" />
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => refetch()}
+              aria-label="Actualizar"
+              title="Actualizar"
+              disabled={isFetching}
+            >
+              <Icon icon={isFetching ? 'svg-spinners:180-ring' : 'solar:refresh-bold'} width={16} />
+            </Button>
+          </div>
         </div>
       </div>
 
-      <Card>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Nombre</TableHead>
-              <TableHead>Puesto</TableHead>
-              <TableHead>Capacitación</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead className="text-right">Progreso</TableHead>
-              <TableHead>Licencia</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              Array.from({ length: 4 }).map((_, i) => (
-                <TableRow key={i}>
-                  <TableCell colSpan={6}>
-                    <Skeleton className="h-6 w-full" />
-                  </TableCell>
-                </TableRow>
-              ))
-            ) : isError ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center text-destructive">
-                  Error al cargar empleados
-                </TableCell>
-              </TableRow>
-            ) : empleados.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
-                  Sin empleados asignados
-                </TableCell>
-              </TableRow>
-            ) : (
-              empleados.map((e) => (
-                <EmpleadoRow
-                  key={e.empleadoId}
-                  emp={e}
-                  puestoNombre={e.puestoNombre ?? (e.idPuesto != null ? (puestoMap.get(e.idPuesto) ?? '—') : '—')}
-                  onOpen={() => setSelected(e.empleadoId)}
-                />
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </Card>
+      <p className="flex items-center gap-1.5 text-xs text-slate-500">
+        <Icon icon="solar:info-circle-linear" width={14} />
+        Haz clic en un empleado para ver el detalle de sus módulos y evaluaciones.
+      </p>
+
+      <DataTable minWidth="760px">
+        <DataTableHead>
+          <DataTableHeadCell>Nombre</DataTableHeadCell>
+          <DataTableHeadCell>Puesto</DataTableHeadCell>
+          <DataTableHeadCell>Capacitación</DataTableHeadCell>
+          <DataTableHeadCell>Estado</DataTableHeadCell>
+          <DataTableHeadCell className="text-right">Progreso</DataTableHeadCell>
+          <DataTableHeadCell>Licencia</DataTableHeadCell>
+        </DataTableHead>
+        <DataTableBody>
+          {isLoading ? (
+            <DataTableSkeleton rows={4} cols={6} />
+          ) : isError ? (
+            <DataTableEmpty
+              icon="solar:danger-triangle-bold"
+              title="No se pudieron cargar los empleados"
+              description="Revisa la conexión y presiona el botón Actualizar."
+              colSpan={6}
+            />
+          ) : empleados.length === 0 ? (
+            <DataTableEmpty
+              icon="solar:users-group-rounded-bold"
+              title="Sin empleados asignados"
+              description="Cambia los filtros o asigna capacitaciones en la pestaña Asignar."
+              colSpan={6}
+            />
+          ) : (
+            empleados.map((e) => (
+              <EmpleadoRow
+                key={e.empleadoId}
+                emp={e}
+                puestoNombre={e.puestoNombre ?? (e.idPuesto != null ? (puestoMap.get(e.idPuesto) ?? '—') : '—')}
+                onOpen={() => setSelected(e.empleadoId)}
+              />
+            ))
+          )}
+        </DataTableBody>
+      </DataTable>
 
       <EmpleadoCapDetailSheet
         empleadoId={selected}
@@ -198,24 +199,32 @@ function EmpleadoRow({
   puestoNombre: string
   onOpen: () => void
 }) {
+  const pct = emp.modulosTotal > 0 ? Math.round((emp.modulosAprobados / emp.modulosTotal) * 100) : 0
   return (
-    <TableRow className="cursor-pointer" onClick={onOpen}>
-      <TableCell className="font-medium">{emp.nombre}</TableCell>
-      <TableCell>{puestoNombre}</TableCell>
-      <TableCell>{emp.capacitacionNombre ?? '—'}</TableCell>
-      <TableCell>
+    <DataTableRow onClick={onOpen}>
+      <DataTableCell className="font-medium text-slate-900">{emp.nombre}</DataTableCell>
+      <DataTableCell className="text-slate-600">{puestoNombre}</DataTableCell>
+      <DataTableCell className="text-slate-600">{emp.capacitacionNombre ?? '—'}</DataTableCell>
+      <DataTableCell>
         {emp.estaActivo ? (
-          <Badge variant="success">Activo</Badge>
+          <Tag severity="success" value="Activo" />
         ) : (
-          <Badge variant="destructive">Inactivo</Badge>
+          <Tag severity="danger" value="Inactivo" />
         )}
-      </TableCell>
-      <TableCell className="text-right tabular-nums">
-        {emp.modulosAprobados}/{emp.modulosTotal}
-      </TableCell>
-      <TableCell>
+      </DataTableCell>
+      <DataTableCell className="text-right">
+        <div className="flex items-center justify-end gap-2">
+          <div className="hidden h-1.5 w-16 overflow-hidden rounded-full bg-slate-100 sm:block">
+            <div className="h-full rounded-full bg-emerald-500" style={{ width: `${pct}%` }} />
+          </div>
+          <span className="tabular-nums text-slate-700">
+            {emp.modulosAprobados}/{emp.modulosTotal}
+          </span>
+        </div>
+      </DataTableCell>
+      <DataTableCell>
         {licenciaBadge(emp.licenciaEstado)}
-      </TableCell>
-    </TableRow>
+      </DataTableCell>
+    </DataTableRow>
   )
 }

@@ -1,4 +1,4 @@
-import ExcelJS from 'exceljs'
+import type ExcelJS from 'exceljs'
 import { formatCatorcena } from '@/lib/utils'
 import type { DetalleDiaHE, FuenteTurno } from '@/types'
 
@@ -407,15 +407,16 @@ async function descargar(wb: ExcelJS.Workbook, nombre: string) {
 }
 
 /** Construye el libro con Resumen (réplica del machote) + Detalle día a día + Excluidos. */
-export function construirLibroHorasExtra(opts: {
+export async function construirLibroHorasExtra(opts: {
   filas: FilaExport[]
   excluidos: ExcluidoExport[]
   detalle?: DetalleEmpleadoExport[]
   desde: string
   hasta: string
   fuente?: 'TODAS' | FuenteTurno
-}): ExcelJS.Workbook {
-  const wb = new ExcelJS.Workbook()
+}): Promise<ExcelJS.Workbook> {
+  const { Workbook } = (await import('exceljs')).default
+  const wb = new Workbook()
   wb.creator = 'RototecRH'
   const notaFiltro = opts.fuente && opts.fuente !== 'TODAS' ? `   ·   fuente: ${fuenteLabel(opts.fuente)}` : ''
   hojaResumen(wb, opts.filas, opts.desde, opts.hasta, notaFiltro)
@@ -425,12 +426,13 @@ export function construirLibroHorasExtra(opts: {
 }
 
 /** Construye el libro con SOLO la hoja de empleados excluidos. */
-export function construirLibroExcluidos(opts: {
+export async function construirLibroExcluidos(opts: {
   excluidos: ExcluidoExport[]
   desde: string
   hasta: string
-}): ExcelJS.Workbook {
-  const wb = new ExcelJS.Workbook()
+}): Promise<ExcelJS.Workbook> {
+  const { Workbook } = (await import('exceljs')).default
+  const wb = new Workbook()
   wb.creator = 'RototecRH'
   hojaExcluidos(wb, opts.excluidos, opts.desde, opts.hasta)
   return wb
@@ -445,7 +447,7 @@ export async function exportarHorasExtra(opts: {
   hasta: string
   fuente?: 'TODAS' | FuenteTurno
 }): Promise<void> {
-  await descargar(construirLibroHorasExtra(opts), `HorasExtra_${opts.desde}_a_${opts.hasta}.xlsx`)
+  await descargar(await construirLibroHorasExtra(opts), `HorasExtra_${opts.desde}_a_${opts.hasta}.xlsx`)
 }
 
 /** Exporta SOLO la hoja de empleados excluidos. */
@@ -454,5 +456,5 @@ export async function exportarExcluidos(opts: {
   desde: string
   hasta: string
 }): Promise<void> {
-  await descargar(construirLibroExcluidos(opts), `HorasExtra_Excluidos_${opts.desde}_a_${opts.hasta}.xlsx`)
+  await descargar(await construirLibroExcluidos(opts), `HorasExtra_Excluidos_${opts.desde}_a_${opts.hasta}.xlsx`)
 }

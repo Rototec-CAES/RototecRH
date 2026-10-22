@@ -8,8 +8,8 @@ import {
   TEMPORALIDAD_CONTRATO,
   TIPOS_CONTRATO,
   TIPOS_DISCAPACIDAD,
-  BANCOS_GUATEMALA,
   FORMAS_PAGO,
+  FRECUENCIAS_PAGO,
   TIPOS_CUENTA,
 } from '@/constants/guatemala'
 import {
@@ -20,6 +20,7 @@ import {
   usePuestos,
 } from '@/hooks/useCompanyCatalogos'
 import { useBiotimeDepartamentos, useBiotimeUbicaciones } from '@/hooks/useBiotime'
+import { useBancosNomina } from '@/hooks/useNomina'
 import type { EmpleadoCreateValues } from '@/lib/validators'
 import { CheckboxField, SelectField, TextField, type Opt } from './fields'
 
@@ -52,8 +53,8 @@ const jornadas: Opt[] = JORNADAS.map((x) => ({ value: x.value, label: x.label })
 const temporalidades: Opt[] = TEMPORALIDAD_CONTRATO.map((x) => ({ value: x.value, label: x.label }))
 const tiposContrato: Opt[] = TIPOS_CONTRATO.map((x) => ({ value: x.value, label: x.label }))
 const discapacidades: Opt[] = TIPOS_DISCAPACIDAD.map((x) => ({ value: x.codigo, label: x.label }))
-const bancos: Opt[] = BANCOS_GUATEMALA.map((x) => ({ value: x.codigo, label: `${x.codigo} · ${x.nombre}` }))
 const formasPago: Opt[] = FORMAS_PAGO.map((x) => ({ value: x.value, label: x.label }))
+const frecuenciasPago: Opt[] = FRECUENCIAS_PAGO.map((x) => ({ value: x.value, label: x.label }))
 const tiposCuenta: Opt[] = TIPOS_CUENTA.map((x) => ({ value: x.value, label: x.label }))
 
 const toOpt = (rows: { id: number; nombre: string }[] | undefined): Opt[] =>
@@ -84,6 +85,14 @@ export function StepContent({ index }: { index: number }) {
   const departamentoId = numOrUndef(watch('id_departamento'))
   const subDepId = numOrUndef(watch('id_sub_departamento'))
   const esTransferencia = watch('forma_pago') === 'TRANSFERENCIA'
+  // Bancos del catálogo tBancos. Un código viejo del empleado (105, 107…) se conserva como opción
+  // para no perderlo al editar; su banco real se define en Planilla › Bancos.
+  const { data: catBancos, isLoading: cargandoBancos } = useBancosNomina()
+  const codigoBancoActual = watch('codigo_banco')
+  const bancos: Opt[] = (catBancos?.bancos ?? []).map((b) => ({ value: b.codigo, label: `${b.codigo} · ${b.nombre}` }))
+  if (codigoBancoActual && !bancos.some((b) => b.value === codigoBancoActual)) {
+    bancos.unshift({ value: codigoBancoActual, label: `${codigoBancoActual} · código anterior` })
+  }
 
   const paises = usePaises()
   const paisId = paises.data?.find((p) => p.codigo === paisKey)?.id
@@ -201,11 +210,13 @@ export function StepContent({ index }: { index: number }) {
           <TextField name="profesion" label="Profesión" />
           <TextField name="titulo" label="Título / diploma" />
           <SelectField name="forma_pago" label="Forma de pago" required options={formasPago} />
+          <SelectField name="frecuencia_pago" label="Frecuencia de pago" required options={frecuenciasPago} />
           <SelectField
             name="codigo_banco"
             label="Banco"
             required={esTransferencia}
             disabled={!esTransferencia}
+            loading={cargandoBancos}
             options={bancos}
           />
           <TextField name="numero_cuenta" label="No. de cuenta" required={esTransferencia} disabled={!esTransferencia} />

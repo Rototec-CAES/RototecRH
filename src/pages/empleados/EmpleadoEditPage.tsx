@@ -3,9 +3,10 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { FormProvider, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
-import { ArrowLeft, Loader2, Save } from 'lucide-react'
+import { Icon } from '@iconify/react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { PageHeader } from '@/components/shared/PageHeader'
+import { Panel } from '@/shared/report/report-ui'
 import { Skeleton } from '@/components/ui/skeleton'
 import { empleadoCreateSchema, type EmpleadoCreateValues } from '@/lib/validators'
 import type { CreateEmpleadoInput, EmpleadoBackend } from '@/types'
@@ -54,6 +55,7 @@ function aValoresForm(e: EmpleadoBackend): Partial<EmpleadoCreateValues> {
     profesion: e.profesion ?? '',
     titulo: e.titulo ?? '',
     forma_pago: e.formaPago ?? 'TRANSFERENCIA',
+    frecuencia_pago: e.frecuenciaPago === 'MENSUAL' ? 'MENSUAL' : 'QUINCENAL',
     codigo_banco: e.codigoBanco ?? '',
     numero_cuenta: e.numeroCuenta ?? '',
     tipo_cuenta: e.tipoCuenta ?? '',
@@ -77,14 +79,11 @@ function useResetOnChange(value: unknown, reset: () => void) {
   }, [value])
 }
 
-function Seccion({ titulo, children }: { titulo: string; children: React.ReactNode }) {
+function Seccion({ titulo, icono, children }: { titulo: string; icono: string; children: React.ReactNode }) {
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base">{titulo}</CardTitle>
-      </CardHeader>
-      <CardContent>{children}</CardContent>
-    </Card>
+    <Panel title={titulo} icon={icono}>
+      {children}
+    </Panel>
   )
 }
 
@@ -129,22 +128,27 @@ function EditForm({ id, empleado }: { id: string; empleado: EmpleadoBackend }) {
 
   return (
     <div className="mx-auto max-w-4xl space-y-5">
-      <div className="flex items-center justify-between gap-2">
-        <div>
-          <Button variant="ghost" size="sm" onClick={() => navigate(`/empleados/${id}`)}>
-            <ArrowLeft className="h-4 w-4" />
-            Volver
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <PageHeader
+          titulo="Editar empleado"
+          icono="solar:pen-bold"
+          descripcion={
+            <>
+              Corrige o completa los datos. Los campos con <span className="font-semibold text-red-600">*</span> son
+              obligatorios.
+            </>
+          }
+        >
+          <Button variant="outline" onClick={() => navigate(`/empleados/${id}`)}>
+            <Icon icon="solar:alt-arrow-left-linear" />
+            Volver a la ficha
           </Button>
-          <h2 className="mt-1 text-xl font-semibold tracking-tight">Editar empleado</h2>
-          <p className="text-sm text-muted-foreground">
-            Corrige o completa los datos. Los campos con <span className="text-destructive">*</span> son obligatorios.
-          </p>
-        </div>
+        </PageHeader>
       </div>
 
       <FormProvider {...form}>
         <form onSubmit={form.handleSubmit(onSubmit, () => toast.error('Revisá los campos marcados en rojo'))} className="space-y-5">
-          <Seccion titulo="Organización">
+          <Seccion titulo="Organización" icono="solar:structure-bold">
             <div className="grid gap-4 sm:grid-cols-2">
               <StepContent index={0} />
               <StepContent index={1} />
@@ -153,22 +157,22 @@ function EditForm({ id, empleado }: { id: string; empleado: EmpleadoBackend }) {
               <StepContent index={4} />
             </div>
           </Seccion>
-          <Seccion titulo="Datos personales">
+          <Seccion titulo="Datos personales" icono="solar:user-id-bold">
             <StepContent index={5} />
           </Seccion>
-          <Seccion titulo="Datos culturales">
+          <Seccion titulo="Datos culturales" icono="solar:globus-bold">
             <StepContent index={6} />
           </Seccion>
-          <Seccion titulo="Contrato y pago">
+          <Seccion titulo="Contrato y pago" icono="solar:wallet-money-bold">
             <StepContent index={7} />
           </Seccion>
 
-          <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t bg-background/95 py-3 backdrop-blur">
+          <div className="sticky bottom-0 -mx-1 flex items-center justify-end gap-2 rounded-2xl border border-slate-200 bg-white/95 px-4 py-3 shadow-lg backdrop-blur">
             <Button type="button" variant="outline" onClick={() => navigate(`/empleados/${id}`)} disabled={mut.isPending}>
               Cancelar
             </Button>
             <Button type="submit" disabled={mut.isPending} className="gap-2">
-              {mut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              <Icon icon={mut.isPending ? 'svg-spinners:180-ring' : 'solar:diskette-bold'} />
               {mut.isPending ? 'Guardando…' : 'Guardar cambios'}
             </Button>
           </div>
@@ -182,8 +186,12 @@ export default function EmpleadoEditPage() {
   const { id } = useParams<{ id: string }>()
   const { data, isLoading, isError } = useEmpleadoBackend(id)
 
-  if (isLoading) return <Skeleton className="mx-auto h-96 max-w-4xl" />
+  if (isLoading) return <Skeleton className="mx-auto h-96 max-w-4xl rounded-2xl" />
   if (isError || !data || !id)
-    return <p className="mx-auto max-w-4xl text-sm text-muted-foreground">No se pudo cargar el empleado.</p>
+    return (
+      <p className="mx-auto max-w-4xl rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-800">
+        No se pudo cargar el empleado.
+      </p>
+    )
   return <EditForm id={id} empleado={data} />
 }

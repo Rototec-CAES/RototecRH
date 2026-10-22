@@ -1,5 +1,6 @@
 import { type ReactNode } from 'react'
 import { useFormContext } from 'react-hook-form'
+import { Icon } from '@iconify/react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -29,11 +30,16 @@ function FieldShell({
 }) {
   return (
     <div className="space-y-1.5">
-      <Label className="text-xs font-medium text-muted-foreground">
-        {label} {required && <span className="text-destructive">*</span>}
+      <Label className="text-xs font-semibold text-slate-600">
+        {label} {required && <span className="text-red-600">*</span>}
       </Label>
       {children}
-      {error && <p className="text-xs text-destructive">{error}</p>}
+      {error && (
+        <p className="flex items-center gap-1 text-xs text-red-600">
+          <Icon icon="solar:danger-circle-bold" width={13} className="shrink-0" />
+          {error}
+        </p>
+      )}
     </div>
   )
 }
@@ -65,7 +71,7 @@ export function TextField({
         placeholder={placeholder}
         disabled={disabled}
         aria-invalid={!!err}
-        className={cn(err && 'border-destructive focus-visible:ring-destructive')}
+        className={cn(err && 'border-red-400 bg-red-50/40 focus-visible:ring-red-500')}
         {...register(name, type === 'number' ? { valueAsNumber: true } : {})}
       />
     </FieldShell>
@@ -103,7 +109,7 @@ export function SelectField({
         onValueChange={(v) => setValue(name, v as never, { shouldValidate: true, shouldDirty: true })}
         disabled={disabled || loading}
       >
-        <SelectTrigger className={cn(err && 'border-destructive focus:ring-destructive')}>
+        <SelectTrigger className={cn(err && 'border-red-400 bg-red-50/40 focus:ring-red-500')}>
           <SelectValue placeholder={loading ? 'Cargando…' : placeholder} />
         </SelectTrigger>
         <SelectContent>
@@ -130,17 +136,17 @@ export function CheckboxField({
   const { watch, setValue } = useFormContext<EmpleadoCreateValues>()
   const checked = watch(name) as boolean | undefined
   return (
-    <div className="flex items-start gap-3 py-1">
+    <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2.5">
       <Checkbox
         id={name}
         checked={!!checked}
         onCheckedChange={(val) => setValue(name, !!val as never, { shouldDirty: true })}
       />
       <div className="space-y-0.5 leading-none">
-        <Label htmlFor={name} className="text-xs font-medium text-muted-foreground cursor-pointer">
+        <Label htmlFor={name} className="cursor-pointer text-sm font-medium text-slate-700">
           {label}
         </Label>
-        {hint && <p className="text-xs text-muted-foreground/70">{hint}</p>}
+        {hint && <p className="text-xs text-slate-500">{hint}</p>}
       </div>
     </div>
   )

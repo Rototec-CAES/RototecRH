@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { FormProvider, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
-import { ArrowLeft, ArrowRight, X } from 'lucide-react'
+import { Icon } from '@iconify/react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { PageHeader } from '@/components/shared/PageHeader'
 import { Stepper } from '@/components/ui/stepper'
 import { empleadoCreateSchema, WIZARD_STEP_FIELDS, type EmpleadoCreateValues } from '@/lib/validators'
 import type { CreateEmpleadoInput } from '@/types'
@@ -26,7 +27,7 @@ export default function EmpleadoCreateWizard() {
   const form = useForm<EmpleadoCreateValues>({
     resolver: zodResolver(empleadoCreateSchema),
     mode: 'onTouched',
-    defaultValues: { cantidad_hijos: 0, forma_pago: 'TRANSFERENCIA' },
+    defaultValues: { cantidad_hijos: 0, forma_pago: 'TRANSFERENCIA', frecuencia_pago: 'QUINCENAL' },
   })
 
   // Reseteo en cascada: cambiar un padre limpia a sus hijos.
@@ -97,21 +98,30 @@ export default function EmpleadoCreateWizard() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-semibold tracking-tight">Nuevo empleado</h2>
-          <p className="text-sm text-muted-foreground">
-            Paso {step + 1} de {WIZARD_STEPS.length} · {WIZARD_STEPS[step].title}
-          </p>
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <PageHeader
+          titulo="Nuevo empleado"
+          icono="solar:user-plus-bold"
+          descripcion={
+            <>
+              Paso {step + 1} de {WIZARD_STEPS.length} · <span className="font-medium text-slate-700">{WIZARD_STEPS[step].title}</span>
+            </>
+          }
+        >
+          <Button variant="outline" onClick={() => navigate('/empleados')}>
+            <Icon icon="solar:close-circle-linear" />
+            Cancelar
+          </Button>
+        </PageHeader>
+        <div className="mt-4 flex items-center gap-3">
+          <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-sky-500 to-cyan-500 transition-all duration-300"
+              style={{ width: `${progreso}%` }}
+            />
+          </div>
+          <span className="text-xs font-semibold tabular-nums text-slate-500">{progreso}%</span>
         </div>
-        <Button variant="ghost" onClick={() => navigate('/empleados')}>
-          <X className="h-4 w-4" />
-          Cancelar
-        </Button>
-      </div>
-
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
-        <div className="h-full rounded-full bg-primary transition-all duration-300" style={{ width: `${progreso}%` }} />
       </div>
 
       <div className="grid gap-6 md:grid-cols-[260px_1fr]">
@@ -122,27 +132,28 @@ export default function EmpleadoCreateWizard() {
         <Card className="p-6">
           <FormProvider {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)}>
-              <h3 className="mb-1 text-lg font-semibold">{WIZARD_STEPS[step].title}</h3>
-              <p className="mb-6 text-sm text-muted-foreground">
-                Los campos marcados con <span className="text-destructive">*</span> son obligatorios.
+              <h3 className="mb-1 text-lg font-semibold text-slate-900">{WIZARD_STEPS[step].title}</h3>
+              <p className="mb-6 text-sm text-slate-500">
+                Los campos marcados con <span className="font-semibold text-red-600">*</span> son obligatorios.
               </p>
 
               <div key={step} className="min-h-[300px] animate-in fade-in slide-in-from-right-4 duration-300">
                 <StepContent index={step} />
               </div>
 
-              <div className="mt-8 flex items-center justify-between border-t pt-5">
+              <div className="mt-8 flex items-center justify-between border-t border-slate-100 pt-5">
                 <Button type="button" variant="outline" onClick={back} disabled={step === 0}>
-                  <ArrowLeft className="h-4 w-4" />
+                  <Icon icon="solar:alt-arrow-left-linear" />
                   Atrás
                 </Button>
                 {step < LAST ? (
                   <Button type="button" onClick={next}>
                     Siguiente
-                    <ArrowRight className="h-4 w-4" />
+                    <Icon icon="solar:alt-arrow-right-linear" />
                   </Button>
                 ) : (
                   <Button type="submit" disabled={crearMut.isPending}>
+                    <Icon icon={crearMut.isPending ? 'svg-spinners:180-ring' : 'solar:check-circle-bold'} />
                     {crearMut.isPending ? 'Creando…' : 'Crear empleado'}
                   </Button>
                 )}

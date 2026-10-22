@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Pencil, Plus, Trash2, Upload, Video } from 'lucide-react'
+import { Icon } from '@iconify/react'
 import { toast } from '@/components/ui/sonner'
 import { extractApiErrorMessage } from '@/api/client'
 
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -18,6 +17,9 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
+import { EmptyState } from '@/components/shared/DataTable'
+import { confirmar } from '@/components/shared/ConfirmDialog'
+import { Tag } from '@/shared/report/report-ui'
 import {
   useCreateEvaluacion,
   useCreatePregunta,
@@ -59,7 +61,8 @@ export function ModuloEvaluacionDialog({ idModulo, open, onOpenChange }: Props) 
   }
   async function onDeleteEval() {
     if (!data) return
-    if (!window.confirm('¿Eliminar la evaluación completa?')) return
+    const ok = await confirmar({ titulo: '¿Eliminar la evaluación completa?', textoConfirmar: 'Eliminar', peligro: true })
+    if (!ok) return
     try {
       await deleteEval.mutateAsync(data.evaluacion.id)
       toast.success('Evaluación eliminada')
@@ -72,7 +75,12 @@ export function ModuloEvaluacionDialog({ idModulo, open, onOpenChange }: Props) 
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Evaluación del módulo</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <span className="grid h-8 w-8 place-items-center rounded-xl bg-slate-900 text-white">
+              <Icon icon="solar:clipboard-list-bold" width={16} />
+            </span>
+            Evaluación del módulo
+          </DialogTitle>
           <DialogDescription>
             {data?.evaluacion.nombre ?? 'Define un examen de preguntas o un video para la evaluación.'}
           </DialogDescription>
@@ -80,18 +88,21 @@ export function ModuloEvaluacionDialog({ idModulo, open, onOpenChange }: Props) 
 
         {isLoading ? (
           <div className="space-y-3">
-            <Skeleton className="h-16 w-full" />
-            <Skeleton className="h-16 w-full" />
+            <Skeleton className="h-16 w-full rounded-xl" />
+            <Skeleton className="h-16 w-full rounded-xl" />
           </div>
         ) : isError ? (
-          <p className="text-center text-sm text-destructive">Error al cargar la evaluación</p>
+          <EmptyState icon="solar:danger-triangle-bold" title="No se pudo cargar la evaluación" description="Cierra y vuelve a abrir." />
         ) : !data ? (
-          <div className="py-8 text-center">
-            <p className="mb-4 text-sm text-muted-foreground">
-              Este módulo no tiene evaluación todavía.
-            </p>
-            <Button onClick={onCreate} disabled={createEval.isPending || idModulo === undefined}>
-              <Plus className="h-4 w-4" />
+          <div className="flex flex-col items-center pb-6">
+            <EmptyState
+              icon="solar:clipboard-list-bold"
+              title="Este módulo no tiene evaluación todavía"
+              description="Créala para poder agregar preguntas o un video."
+              className="pb-4"
+            />
+            <Button onClick={onCreate} disabled={createEval.isPending || idModulo === undefined} data-testid="rh-capacitaciones__btn-crear-evaluacion">
+              <Icon icon={createEval.isPending ? 'svg-spinners:180-ring' : 'solar:add-circle-bold'} width={16} />
               Crear evaluación
             </Button>
           </div>
@@ -114,7 +125,9 @@ export function ModuloEvaluacionDialog({ idModulo, open, onOpenChange }: Props) 
                 )}
 
                 {data.preguntas.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Sin preguntas todavía</p>
+                  <p className="rounded-xl border border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-500">
+                    Sin preguntas todavía. Escribe la primera arriba y presiona Agregar.
+                  </p>
                 ) : (
                   data.preguntas.map((p) => (
                     <PreguntaCard key={p.id} idModulo={idModulo as number} pregunta={p} />
@@ -123,9 +136,9 @@ export function ModuloEvaluacionDialog({ idModulo, open, onOpenChange }: Props) 
               </>
             )}
 
-            <DialogFooter>
+            <DialogFooter className="border-t border-slate-100 pt-4">
               <Button variant="destructive" onClick={onDeleteEval} disabled={deleteEval.isPending}>
-                <Trash2 className="h-4 w-4" />
+                <Icon icon="solar:trash-bin-trash-bold" width={16} />
                 Eliminar evaluación
               </Button>
             </DialogFooter>
@@ -160,9 +173,9 @@ function NombreEvaluacion({
   }
 
   return (
-    <div className="flex items-end gap-2 rounded-md border bg-muted/40 p-3">
+    <div className="flex items-end gap-2 rounded-xl border border-slate-200 bg-slate-50/70 p-3">
       <div className="flex-1">
-        <Label className="mb-1.5 block">Nombre de la evaluación</Label>
+        <Label className="mb-1.5 block text-xs font-semibold text-slate-600">Nombre de la evaluación</Label>
         <Input
           placeholder="Nombre de la evaluación"
           value={value}
@@ -170,16 +183,16 @@ function NombreEvaluacion({
         />
       </div>
       <Button onClick={onSave} disabled={updateMut.isPending || value === nombre}>
-        <Pencil className="h-4 w-4" />
+        <Icon icon={updateMut.isPending ? 'svg-spinners:180-ring' : 'solar:diskette-bold'} width={16} />
         Guardar
       </Button>
     </div>
   )
 }
 
-const MODOS: { value: ModoEvaluacion; label: string; descripcion: string }[] = [
-  { value: 'EXAMEN', label: 'Examen', descripcion: 'Preguntas con respuestas; se aprueba con el porcentaje del módulo.' },
-  { value: 'VIDEO', label: 'Video', descripcion: 'El empleado ve el video completo y lo marca como completado.' },
+const MODOS: { value: ModoEvaluacion; label: string; descripcion: string; icon: string }[] = [
+  { value: 'EXAMEN', label: 'Examen', descripcion: 'Preguntas con respuestas; se aprueba con el porcentaje del módulo.', icon: 'solar:checklist-minimalistic-bold' },
+  { value: 'VIDEO', label: 'Video', descripcion: 'El empleado ve el video completo y lo marca como completado.', icon: 'solar:videocamera-record-bold' },
 ]
 
 function ModoSelector({ idModulo, evaluacion }: { idModulo: number; evaluacion: Evaluacion }) {
@@ -196,13 +209,13 @@ function ModoSelector({ idModulo, evaluacion }: { idModulo: number; evaluacion: 
   }
 
   return (
-    <div className="rounded-md border bg-muted/40 p-3">
-      <Label className="mb-2 block">Modo de evaluación</Label>
+    <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+      <Label className="mb-2 block text-xs font-semibold text-slate-600">Modo de evaluación</Label>
       <div className="grid gap-2 sm:grid-cols-2">
         {MODOS.map((m) => (
           <label
             key={m.value}
-            className="flex cursor-pointer items-start gap-2 rounded-md border bg-background p-2 text-sm has-[:checked]:border-primary"
+            className="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 bg-white p-3 text-sm transition-colors hover:border-slate-300 has-[:checked]:border-sky-500 has-[:checked]:bg-sky-50/60 has-[:checked]:ring-1 has-[:checked]:ring-sky-500"
           >
             <input
               type="radio"
@@ -211,11 +224,14 @@ function ModoSelector({ idModulo, evaluacion }: { idModulo: number; evaluacion: 
               checked={evaluacion.modo === m.value}
               onChange={() => onChange(m.value)}
               disabled={updateMut.isPending}
-              className="mt-0.5 accent-primary"
+              className="mt-0.5 accent-sky-500"
             />
             <span>
-              <span className="font-medium">{m.label}</span>
-              <span className="block text-xs text-muted-foreground">{m.descripcion}</span>
+              <span className="flex items-center gap-1.5 font-medium text-slate-800">
+                <Icon icon={m.icon} width={15} className="text-sky-600" />
+                {m.label}
+              </span>
+              <span className="mt-0.5 block text-xs text-slate-500">{m.descripcion}</span>
             </span>
           </label>
         ))}
@@ -258,7 +274,8 @@ function VideoEvaluacion({ idModulo, evaluacion }: { idModulo: number; evaluacio
   }
 
   async function onQuitar() {
-    if (!window.confirm('¿Quitar el video de esta evaluación?')) return
+    const ok = await confirmar({ titulo: '¿Quitar el video de esta evaluación?', textoConfirmar: 'Quitar video', peligro: true })
+    if (!ok) return
     try {
       await updateMut.mutateAsync({ id: evaluacion.id, videoUrl: null, videoKey: null })
       toast.success('Video quitado')
@@ -268,7 +285,7 @@ function VideoEvaluacion({ idModulo, evaluacion }: { idModulo: number; evaluacio
   }
 
   return (
-    <div className="space-y-3 rounded-md border p-3">
+    <div className="space-y-3 rounded-xl border border-slate-200 p-3">
       <input
         ref={inputRef}
         type="file"
@@ -283,21 +300,21 @@ function VideoEvaluacion({ idModulo, evaluacion }: { idModulo: number; evaluacio
           src={evaluacion.videoUrl}
           controls
           preload="metadata"
-          className="aspect-video w-full rounded-md bg-black"
+          className="aspect-video w-full rounded-lg bg-black"
         />
       ) : (
-        <div className="flex aspect-video w-full flex-col items-center justify-center gap-2 rounded-md border border-dashed text-sm text-muted-foreground">
-          <Video className="h-8 w-8" />
+        <div className="flex aspect-video w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-6 text-center text-sm text-slate-500">
+          <Icon icon="solar:videocamera-record-bold" width={32} className="text-slate-400" />
           Sin video todavía. Los empleados no podrán abrir el enlace hasta que cargues uno.
         </div>
       )}
 
       {progreso !== null && (
         <div>
-          <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-            <div className="h-full bg-primary transition-all" style={{ width: `${progreso}%` }} />
+          <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+            <div className="h-full bg-gradient-to-r from-cyan-500 to-teal-500 transition-all" style={{ width: `${progreso}%` }} />
           </div>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="mt-1 text-xs text-slate-500">
             {progreso < 100 ? `Subiendo… ${progreso}%` : 'Procesando…'}
           </p>
         </div>
@@ -306,12 +323,12 @@ function VideoEvaluacion({ idModulo, evaluacion }: { idModulo: number; evaluacio
       <div className="flex flex-wrap justify-end gap-2">
         {evaluacion.videoUrl && (
           <Button variant="outline" onClick={onQuitar} disabled={ocupado}>
-            <Trash2 className="h-4 w-4" />
+            <Icon icon="solar:trash-bin-trash-bold" width={16} />
             Quitar video
           </Button>
         )}
         <Button onClick={() => inputRef.current?.click()} disabled={ocupado}>
-          <Upload className="h-4 w-4" />
+          <Icon icon={progreso !== null ? 'svg-spinners:180-ring' : 'solar:upload-bold'} width={16} />
           {evaluacion.videoUrl ? 'Reemplazar video' : 'Subir video'}
         </Button>
       </div>
@@ -341,24 +358,24 @@ function NuevaPregunta({ idModulo, idEvaluacion }: { idModulo: number; idEvaluac
 
   return (
     <form
-      className="flex items-end gap-2 rounded-md border bg-muted/40 p-3"
+      className="flex items-end gap-2 rounded-xl border border-sky-100 bg-sky-50/60 p-3"
       onSubmit={form.handleSubmit(onSubmit)}
     >
       <div className="flex-1">
-        <Label className="mb-1.5 block">Nueva pregunta</Label>
+        <Label className="mb-1.5 block text-xs font-semibold text-slate-600">Nueva pregunta</Label>
         <Input placeholder="Texto de la pregunta" {...form.register('pregunta')} />
         {form.formState.errors.pregunta && (
-          <p className="mt-1 text-xs text-destructive">
+          <p className="mt-1 text-xs text-red-600">
             {form.formState.errors.pregunta.message}
           </p>
         )}
       </div>
       <div className="w-24">
-        <Label className="mb-1.5 block">Puntos</Label>
+        <Label className="mb-1.5 block text-xs font-semibold text-slate-600">Puntos</Label>
         <Input type="number" step="any" {...form.register('puntosPorRespuesta')} />
       </div>
       <Button type="submit" disabled={createMut.isPending}>
-        <Plus className="h-4 w-4" />
+        <Icon icon={createMut.isPending ? 'svg-spinners:180-ring' : 'solar:add-circle-bold'} width={16} />
         Agregar
       </Button>
     </form>
@@ -373,7 +390,8 @@ function PreguntaCard({ idModulo, pregunta }: { idModulo: number; pregunta: Preg
   const [correcta, setCorrecta] = useState(false)
 
   async function onDeletePregunta() {
-    if (!window.confirm('¿Eliminar esta pregunta?')) return
+    const ok = await confirmar({ titulo: '¿Eliminar esta pregunta?', textoConfirmar: 'Eliminar', peligro: true })
+    if (!ok) return
     try {
       await deletePregunta.mutateAsync(pregunta.id)
       toast.success('Pregunta eliminada')
@@ -410,16 +428,22 @@ function PreguntaCard({ idModulo, pregunta }: { idModulo: number; pregunta: Preg
   }
 
   return (
-    <div className="rounded-md border p-3">
+    <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
       <div className="flex items-start justify-between gap-2">
-        <p className="font-medium">{pregunta.pregunta}</p>
+        <p className="flex items-start gap-2 font-medium text-slate-800">
+          <Icon icon="solar:question-square-bold" width={18} className="mt-0.5 shrink-0 text-sky-500" />
+          {pregunta.pregunta}
+        </p>
         <Button
           variant="ghost"
           size="sm"
           onClick={onDeletePregunta}
           disabled={deletePregunta.isPending}
+          title="Eliminar pregunta"
+          aria-label="Eliminar pregunta"
+          className="hover:bg-rose-50 hover:text-rose-600"
         >
-          <Trash2 className="h-4 w-4" />
+          <Icon icon="solar:trash-bin-trash-bold" width={15} />
         </Button>
       </div>
 
@@ -427,19 +451,22 @@ function PreguntaCard({ idModulo, pregunta }: { idModulo: number; pregunta: Preg
         {pregunta.respuestas.map((r) => (
           <li
             key={r.id}
-            className="flex items-center justify-between rounded-md bg-muted/40 px-2 py-1 text-sm"
+            className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-1.5 text-sm"
           >
-            <span className="flex items-center gap-2">
+            <span className="flex items-center gap-2 text-slate-700">
               {r.respuesta}
-              {r.respuestaCorrecta && <Badge variant="success">Correcta</Badge>}
+              {r.respuestaCorrecta && <Tag severity="success" icon="solar:check-circle-bold" value="Correcta" />}
             </span>
             <Button
               variant="ghost"
               size="sm"
               onClick={() => onDeleteRespuesta(r.id)}
               disabled={deleteRespuesta.isPending}
+              title="Eliminar respuesta"
+              aria-label="Eliminar respuesta"
+              className="h-7 hover:bg-rose-50 hover:text-rose-600"
             >
-              <Trash2 className="h-4 w-4" />
+              <Icon icon="solar:trash-bin-trash-linear" width={14} />
             </Button>
           </li>
         ))}
@@ -456,14 +483,14 @@ function PreguntaCard({ idModulo, pregunta }: { idModulo: number; pregunta: Preg
         <label className="flex items-center gap-1.5 whitespace-nowrap text-sm">
           <input
             type="checkbox"
-            className="h-4 w-4 rounded border-input"
+            className="h-4 w-4 rounded border-slate-300 accent-emerald-600"
             checked={correcta}
             onChange={(e) => setCorrecta(e.target.checked)}
           />
           Correcta
         </label>
-        <Button size="sm" onClick={onAddRespuesta} disabled={createRespuesta.isPending}>
-          <Plus className="h-4 w-4" />
+        <Button size="sm" onClick={onAddRespuesta} disabled={createRespuesta.isPending} title="Agregar respuesta" aria-label="Agregar respuesta">
+          <Icon icon="solar:add-circle-bold" width={16} />
         </Button>
       </div>
     </div>

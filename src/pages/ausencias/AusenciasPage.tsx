@@ -1,11 +1,9 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { CalendarDays, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Icon } from '@iconify/react'
 import { toast } from 'sonner'
 
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
 import { EmpleadoCombobox } from '@/components/ui/employee-combobox'
 import {
   Select,
@@ -14,15 +12,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Skeleton } from '@/components/ui/skeleton'
+import { PageHeader } from '@/components/shared/PageHeader'
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
+  DataTable,
+  DataTableBody,
+  DataTableCell,
+  DataTableEmpty,
+  DataTableHead,
+  DataTableHeadCell,
+  DataTableRow,
+  DataTableSkeleton,
+} from '@/components/shared/DataTable'
+import { TableResultCount } from '@/components/shared/TableToolbar'
+import { confirmar } from '@/components/shared/ConfirmDialog'
+import { FieldLabel, FilterCard, FilterRow, Tag } from '@/shared/report/report-ui'
 import { useEmpleadosBackendList } from '@/hooks/useEmpleados'
 import { useAusenciasPeriodoBackend, useEliminarAusencia, useTiposAusencia } from '@/hooks/useAusenciasBackend'
 import { useAuth } from '@/hooks/useAuth'
@@ -37,6 +40,8 @@ const MESES = [
 ]
 
 const DIAS_SEMANA = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+
+const TID = 'rh-ausencias'
 
 function diaSemanaCorto(iso: string): string {
   const d = new Date(iso.slice(0, 10) + 'T00:00:00')
@@ -101,14 +106,25 @@ export default function AusenciasPage() {
   }
 
   return (
-    <div className="space-y-4">
-      <Card className="p-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+    <div className="space-y-5">
+      <FilterCard>
+        <PageHeader
+          icono="solar:calendar-minimalistic-bold"
+          titulo="Ausencias"
+          descripcion="Registra vacaciones, IGSS, permisos y faltas. Lo que se registra aquí manda sobre el reloj en Asistencias y en la planilla."
+        >
+          <Button onClick={abrirCrear} data-testid={`${TID}__btn-nueva`}>
+            <Icon icon="solar:add-circle-bold" width={16} />
+            Registrar ausencia
+          </Button>
+        </PageHeader>
+
+        <FilterRow className="justify-between">
           <div className="flex flex-wrap items-end gap-3">
             <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">Año</label>
+              <FieldLabel>Año</FieldLabel>
               <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
-                <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="w-28" data-testid={`${TID}__filtro-anio`}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {years.map((y) => (
                     <SelectItem key={y} value={String(y)}>{y}</SelectItem>
@@ -117,9 +133,9 @@ export default function AusenciasPage() {
               </Select>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">Mes</label>
+              <FieldLabel>Mes</FieldLabel>
               <Select value={String(monthIndex)} onValueChange={(v) => setMonthIndex(Number(v))}>
-                <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="w-40" data-testid={`${TID}__filtro-mes`}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {MESES.map((m, i) => (
                     <SelectItem key={m} value={String(i)}>{m}</SelectItem>
@@ -128,17 +144,17 @@ export default function AusenciasPage() {
               </Select>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">Quincena</label>
+              <FieldLabel>Quincena</FieldLabel>
               <Select value={String(quincena)} onValueChange={(v) => setQuincena(Number(v) as Quincena)}>
-                <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="w-32" data-testid={`${TID}__filtro-quincena`}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="1">1ª (1–15)</SelectItem>
                   <SelectItem value="2">2ª (16–fin)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">Empleado</label>
+            <div data-testid={`${TID}__filtro-empleado`}>
+              <FieldLabel>Empleado</FieldLabel>
               <EmpleadoCombobox
                 className="w-72"
                 empleados={empleadosActivos}
@@ -149,70 +165,60 @@ export default function AusenciasPage() {
               />
             </div>
           </div>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <CalendarDays className="h-4 w-4" />
+          <div className="flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-sm font-medium text-slate-600">
+            <Icon icon="solar:calendar-bold" width={16} className="text-slate-400" />
             <span className="tabular-nums">{formatDate(rango.desde)} – {formatDate(rango.hasta)}</span>
           </div>
-        </div>
-      </Card>
+        </FilterRow>
+      </FilterCard>
 
-      <div className="space-y-3">
-        <div className="flex items-end justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-semibold">
-              Ausencias
-              <span className="ml-2 rounded bg-muted px-1.5 text-xs font-normal">
-                {ausenciasFiltradas.length}
-              </span>
-            </h2>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              Atrasos, salidas tempranas y no-shows se revisan en{' '}
-              <Link to="/asistencias" className="underline">Asistencias</Link>.
-            </p>
-          </div>
-          <Button onClick={abrirCrear}><Plus className="h-4 w-4" />Registrar ausencia</Button>
-        </div>
-
-        <Card>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Fecha</TableHead>
-                <TableHead>Día</TableHead>
-                <TableHead>Empleado</TableHead>
-                <TableHead>Tipo</TableHead>
-                <TableHead>Constancia</TableHead>
-                <TableHead className="text-right">Días desc.</TableHead>
-                <TableHead>Séptimo</TableHead>
-                <TableHead>IGSS</TableHead>
-                <TableHead className="w-24"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {ausenciasQ.isLoading ? (
-                <SkeletonRows colSpan={9} />
-              ) : ausenciasFiltradas.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
-                    Sin ausencias en el período
-                  </TableCell>
-                </TableRow>
-              ) : (
-                ausenciasFiltradas.map((a) => (
-                  <AusenciaRow
-                    key={a.id}
-                    ausencia={a}
-                    nombre={empById.get(a.idEmpleado) ? nombreEmpleado(empById.get(a.idEmpleado)!) : `#${a.idEmpleado}`}
-                    tipoNombre={tipoNombreById.get(a.tipoAusencia) ?? `#${a.tipoAusencia}`}
-                    onEdit={() => abrirEditar(a)}
-                    puedeEliminar={puedeEliminarAusencia}
-                  />
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </Card>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <TableResultCount total={ausenciasFiltradas.length} label="ausencia" />
+        <p className="flex items-center gap-1.5 text-xs text-slate-500">
+          <Icon icon="solar:info-circle-bold" width={14} className="text-sky-500" />
+          Atrasos, salidas tempranas y no-shows se revisan en
+          <Link to="/asistencias" className="font-medium text-sky-500 hover:text-sky-600 hover:underline">
+            Asistencias
+          </Link>
+        </p>
       </div>
+
+      <DataTable minWidth="900px">
+        <DataTableHead>
+          <DataTableHeadCell>Fecha</DataTableHeadCell>
+          <DataTableHeadCell>Día</DataTableHeadCell>
+          <DataTableHeadCell>Empleado</DataTableHeadCell>
+          <DataTableHeadCell>Tipo</DataTableHeadCell>
+          <DataTableHeadCell>Constancia</DataTableHeadCell>
+          <DataTableHeadCell className="text-right">Días desc.</DataTableHeadCell>
+          <DataTableHeadCell>Séptimo</DataTableHeadCell>
+          <DataTableHeadCell>IGSS</DataTableHeadCell>
+          <DataTableHeadCell className="w-28 text-right">Acciones</DataTableHeadCell>
+        </DataTableHead>
+        <DataTableBody>
+          {ausenciasQ.isLoading ? (
+            <DataTableSkeleton rows={4} cols={9} />
+          ) : ausenciasFiltradas.length === 0 ? (
+            <DataTableEmpty
+              icon="solar:calendar-minimalistic-bold"
+              title="Sin ausencias en el período"
+              description="Usa «Registrar ausencia» para agregar vacaciones, IGSS, permisos o faltas."
+              colSpan={9}
+            />
+          ) : (
+            ausenciasFiltradas.map((a) => (
+              <AusenciaRow
+                key={a.id}
+                ausencia={a}
+                nombre={empById.get(a.idEmpleado) ? nombreEmpleado(empById.get(a.idEmpleado)!) : `#${a.idEmpleado}`}
+                tipoNombre={tipoNombreById.get(a.tipoAusencia) ?? `#${a.tipoAusencia}`}
+                onEdit={() => abrirEditar(a)}
+                puedeEliminar={puedeEliminarAusencia}
+              />
+            ))
+          )}
+        </DataTableBody>
+      </DataTable>
 
       <AusenciaFormDialog
         open={ausenciaOpen}
@@ -223,20 +229,6 @@ export default function AusenciasPage() {
         ausencia={editando}
       />
     </div>
-  )
-}
-
-function SkeletonRows({ colSpan }: { colSpan: number }) {
-  return (
-    <>
-      {Array.from({ length: 4 }).map((_, i) => (
-        <TableRow key={i}>
-          <TableCell colSpan={colSpan}>
-            <Skeleton className="h-6 w-full" />
-          </TableCell>
-        </TableRow>
-      ))}
-    </>
   )
 }
 
@@ -256,7 +248,13 @@ function AusenciaRow({
   const eliminar = useEliminarAusencia()
 
   async function onDelete() {
-    if (!confirm('¿Eliminar esta ausencia?')) return
+    const ok = await confirmar({
+      titulo: '¿Eliminar esta ausencia?',
+      mensaje: `${nombre} · ${formatDate(ausencia.fechaAusencia)} · ${tipoNombre}`,
+      textoConfirmar: 'Eliminar',
+      peligro: true,
+    })
+    if (!ok) return
     try {
       await eliminar.mutateAsync(ausencia.id)
       toast.success('Ausencia eliminada')
@@ -266,43 +264,53 @@ function AusenciaRow({
   }
 
   return (
-    <TableRow>
-      <TableCell className="tabular-nums">{formatDate(ausencia.fechaAusencia)}</TableCell>
-      <TableCell className="text-xs text-muted-foreground">{diaSemanaCorto(ausencia.fechaAusencia)}</TableCell>
-      <TableCell className="font-medium">{nombre}</TableCell>
-      <TableCell>{tipoNombre}</TableCell>
-      <TableCell>
+    <DataTableRow>
+      <DataTableCell className="tabular-nums text-slate-700">{formatDate(ausencia.fechaAusencia)}</DataTableCell>
+      <DataTableCell className="text-xs text-slate-500">{diaSemanaCorto(ausencia.fechaAusencia)}</DataTableCell>
+      <DataTableCell className="font-medium text-slate-900">{nombre}</DataTableCell>
+      <DataTableCell className="text-slate-700">{tipoNombre}</DataTableCell>
+      <DataTableCell>
         {ausencia.presentoConstancia ? (
-          <Badge variant="success">Sí</Badge>
+          <Tag severity="success" icon="solar:check-circle-bold" value="Sí" />
         ) : (
-          <span className="text-xs text-muted-foreground">No</span>
+          <span className="text-xs text-slate-400">No</span>
         )}
-      </TableCell>
-      <TableCell className="text-right tabular-nums">{ausencia.diasDescontados}</TableCell>
-      <TableCell>
+      </DataTableCell>
+      <DataTableCell className="text-right font-medium tabular-nums">{ausencia.diasDescontados}</DataTableCell>
+      <DataTableCell>
         {ausencia.descontarSeptimo ? (
-          <Badge variant="warning">Sí</Badge>
+          <Tag severity="warning" value="Sí" />
         ) : (
-          <span className="text-xs text-muted-foreground">—</span>
+          <span className="text-xs text-slate-400">—</span>
         )}
-      </TableCell>
-      <TableCell>
+      </DataTableCell>
+      <DataTableCell>
         {ausencia.pagaIGSS ? (
-          <Badge variant="outline">IGSS paga</Badge>
+          <Tag severity="info" value="IGSS paga" />
         ) : (
-          <span className="text-xs text-muted-foreground">—</span>
+          <span className="text-xs text-slate-400">—</span>
         )}
-      </TableCell>
-      <TableCell className="text-right">
-        <Button variant="ghost" size="sm" onClick={onEdit}>
-          <Pencil className="h-4 w-4" />
-        </Button>
-        {puedeEliminar && (
-          <Button variant="ghost" size="sm" onClick={onDelete} disabled={eliminar.isPending}>
-            <Trash2 className="h-4 w-4" />
+      </DataTableCell>
+      <DataTableCell className="text-right">
+        <div className="flex justify-end gap-1">
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onEdit} title="Editar" aria-label="Editar">
+            <Icon icon="solar:pen-bold" width={16} />
           </Button>
-        )}
-      </TableCell>
-    </TableRow>
+          {puedeEliminar && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-rose-500 hover:bg-rose-50 hover:text-rose-600"
+              onClick={onDelete}
+              disabled={eliminar.isPending}
+              title="Eliminar"
+              aria-label="Eliminar"
+            >
+              <Icon icon={eliminar.isPending ? 'svg-spinners:180-ring' : 'solar:trash-bin-trash-bold'} width={16} />
+            </Button>
+          )}
+        </div>
+      </DataTableCell>
+    </DataTableRow>
   )
 }

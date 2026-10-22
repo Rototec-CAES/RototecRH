@@ -11,6 +11,9 @@ const config: Config = {
       screens: { '2xl': '1400px' },
     },
     extend: {
+      fontFamily: {
+        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'system-ui', 'sans-serif'],
+      },
       colors: {
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
@@ -47,9 +50,11 @@ const config: Config = {
         },
       },
       borderRadius: {
-        lg: 'var(--radius)',
-        md: 'calc(var(--radius) - 2px)',
-        sm: 'calc(var(--radius) - 4px)',
+        // Igual que la intranet: lg = radius+4px, md = radius, sm = radius-2px.
+        // xl / 2xl quedan con los valores por defecto de Tailwind.
+        lg: 'calc(var(--radius) + 4px)',
+        md: 'var(--radius)',
+        sm: 'calc(var(--radius) - 2px)',
       },
       keyframes: {
         'accordion-down': {

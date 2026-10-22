@@ -1,22 +1,5 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
-import {
-  AlertTriangle,
-  Check,
-  CheckCircle2,
-  Clock,
-  Coffee,
-  Cog,
-  Loader2,
-  ListChecks,
-  Moon,
-  Palmtree,
-  Search,
-  Sun,
-  Target,
-  Users,
-  X,
-  XCircle,
-} from 'lucide-react'
+import { Icon } from '@iconify/react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -25,7 +8,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
+import { TableSearch } from '@/components/shared/TableToolbar'
+import { EmptyState } from '@/components/shared/DataTable'
 import { cn } from '@/lib/utils'
 import type { PreviewTurnos, PreviewFilaTurno } from '@/types'
 
@@ -59,28 +43,27 @@ function fmtMeta(min: number | null): string {
 // ── Nombre "APELLIDOS — Nombres" ──────────────────────────────────────────────
 function Nombre({ nombre }: { nombre: string }) {
   const i = nombre.indexOf(' - ')
-  if (i === -1) return <span className="font-semibold">{nombre}</span>
+  if (i === -1) return <span className="font-semibold text-slate-900">{nombre}</span>
   return (
     <span className="whitespace-nowrap">
-      <span className="font-semibold tracking-tight">{nombre.slice(0, i)}</span>
-      <span className="text-muted-foreground"> — {nombre.slice(i + 3)}</span>
+      <span className="font-semibold tracking-tight text-slate-900">{nombre.slice(0, i)}</span>
+      <span className="text-slate-500"> — {nombre.slice(i + 3)}</span>
     </span>
   )
 }
 
 // ── Badge de tipo de turno ────────────────────────────────────────────────────
-const TIPO_META: Record<string, { label: string; cls: string; Icon: typeof Sun }> = {
-  DIA: { label: 'Día', cls: 'bg-amber-100 text-amber-700 ring-amber-200', Icon: Sun },
-  NOCHE: { label: 'Noche', cls: 'bg-indigo-100 text-indigo-700 ring-indigo-200', Icon: Moon },
-  DESCANSO: { label: 'Descanso', cls: 'bg-slate-100 text-slate-600 ring-slate-200', Icon: Coffee },
-  ASUETO: { label: 'Asueto', cls: 'bg-violet-100 text-violet-700 ring-violet-200', Icon: Palmtree },
+const TIPO_META: Record<string, { label: string; cls: string; icon: string }> = {
+  DIA: { label: 'Día', cls: 'bg-amber-100 text-amber-700', icon: 'solar:sun-bold' },
+  NOCHE: { label: 'Noche', cls: 'bg-indigo-100 text-indigo-700', icon: 'solar:moon-bold' },
+  DESCANSO: { label: 'Descanso', cls: 'bg-slate-100 text-slate-600', icon: 'solar:cup-hot-bold' },
+  ASUETO: { label: 'Asueto', cls: 'bg-violet-100 text-violet-700', icon: 'solar:confetti-minimalistic-bold' },
 }
 function TipoBadge({ tipo }: { tipo: string }) {
-  const m = TIPO_META[tipo] ?? { label: tipo, cls: 'bg-muted text-muted-foreground ring-border', Icon: Clock }
-  const { Icon } = m
+  const m = TIPO_META[tipo] ?? { label: tipo, cls: 'bg-slate-100 text-slate-500', icon: 'solar:clock-circle-bold' }
   return (
-    <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset', m.cls)}>
-      <Icon className="h-3 w-3" />
+    <span className={cn('inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold', m.cls)}>
+      <Icon icon={m.icon} width={12} />
       {m.label}
     </span>
   )
@@ -88,14 +71,14 @@ function TipoBadge({ tipo }: { tipo: string }) {
 
 // ── Chip de estado (también filtra) ──────────────────────────────────────────
 function StatChip({
-  Icon,
+  icon,
   label,
   value,
   tone,
   active,
   onClick,
 }: {
-  Icon: typeof Users
+  icon: string
   label: string
   value: number
   tone: 'neutral' | 'ok' | 'aviso' | 'error'
@@ -103,10 +86,10 @@ function StatChip({
   onClick: () => void
 }) {
   const tones = {
-    neutral: { ring: 'ring-border', icon: 'text-muted-foreground', on: 'bg-foreground text-background ring-foreground' },
-    ok: { ring: 'ring-emerald-200', icon: 'text-emerald-600', on: 'bg-emerald-600 text-white ring-emerald-600' },
-    aviso: { ring: 'ring-amber-200', icon: 'text-amber-600', on: 'bg-amber-500 text-white ring-amber-500' },
-    error: { ring: 'ring-rose-200', icon: 'text-rose-600', on: 'bg-rose-600 text-white ring-rose-600' },
+    neutral: { bar: 'from-slate-500 to-slate-600', icon: 'bg-slate-100 text-slate-600', on: 'ring-2 ring-slate-400' },
+    ok: { bar: 'from-emerald-500 to-emerald-600', icon: 'bg-emerald-50 text-emerald-600', on: 'ring-2 ring-emerald-400' },
+    aviso: { bar: 'from-amber-500 to-amber-600', icon: 'bg-amber-50 text-amber-600', on: 'ring-2 ring-amber-400' },
+    error: { bar: 'from-rose-500 to-rose-600', icon: 'bg-rose-50 text-rose-600', on: 'ring-2 ring-rose-400' },
   }[tone]
   return (
     <button
@@ -115,14 +98,17 @@ function StatChip({
       aria-label={`Filtrar por ${label}`}
       onClick={onClick}
       className={cn(
-        'group flex items-center gap-2 rounded-xl px-3 py-2 text-left ring-1 transition-all',
-        active ? cn(tones.on, 'shadow-sm') : cn('bg-card hover:bg-muted/60', tones.ring),
+        'relative flex items-center gap-3 overflow-hidden rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-left shadow-sm transition-all hover:shadow-md',
+        active && tones.on,
       )}
     >
-      <Icon className={cn('h-4 w-4 shrink-0', active ? 'text-current opacity-90' : tones.icon)} />
+      <span className={cn('absolute inset-x-0 top-0 h-1 bg-gradient-to-r', tones.bar)} />
+      <span className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-xl', tones.icon)}>
+        <Icon icon={icon} width={16} />
+      </span>
       <div className="leading-none">
-        <div className="text-base font-semibold tabular-nums">{value}</div>
-        <div className={cn('mt-0.5 text-[10px] uppercase tracking-wide', active ? 'opacity-80' : 'text-muted-foreground')}>{label}</div>
+        <div className="text-lg font-semibold tabular-nums text-slate-900">{value}</div>
+        <div className="mt-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-500">{label}</div>
       </div>
     </button>
   )
@@ -138,15 +124,19 @@ function TipoFilter({
   onChange: (v: FiltroTipo) => void
   counts: Record<FiltroTipo, number>
 }) {
-  const opts: { key: FiltroTipo; label: string; dot?: string; on: string }[] = [
-    { key: 'TODOS', label: 'Todos', on: 'bg-foreground text-background' },
-    { key: 'DIA', label: 'Día', dot: 'bg-amber-400', on: 'bg-amber-500 text-white' },
-    { key: 'NOCHE', label: 'Noche', dot: 'bg-indigo-400', on: 'bg-indigo-600 text-white' },
-    { key: 'DESCANSO', label: 'Descanso', dot: 'bg-slate-400', on: 'bg-slate-600 text-white' },
-    { key: 'ASUETO', label: 'Asueto', dot: 'bg-violet-400', on: 'bg-violet-600 text-white' },
+  const opts: { key: FiltroTipo; label: string; dot?: string }[] = [
+    { key: 'TODOS', label: 'Todos' },
+    { key: 'DIA', label: 'Día', dot: 'bg-amber-400' },
+    { key: 'NOCHE', label: 'Noche', dot: 'bg-indigo-400' },
+    { key: 'DESCANSO', label: 'Descanso', dot: 'bg-slate-400' },
+    { key: 'ASUETO', label: 'Asueto', dot: 'bg-violet-400' },
   ]
   return (
-    <div role="group" aria-label="Filtrar por tipo de turno" className="inline-flex items-center gap-1 rounded-lg border bg-muted/40 p-1">
+    <div
+      role="group"
+      aria-label="Filtrar por tipo de turno"
+      className="inline-flex overflow-hidden rounded-lg border border-slate-200 bg-white text-sm"
+    >
       {opts.map((o) => {
         const on = value === o.key
         if (o.key !== 'TODOS' && counts[o.key] === 0) return null
@@ -157,13 +147,13 @@ function TipoFilter({
             aria-pressed={on}
             onClick={() => onChange(o.key)}
             className={cn(
-              'inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-all',
-              on ? cn(o.on, 'shadow-sm') : 'text-muted-foreground hover:bg-background hover:text-foreground',
+              'inline-flex items-center gap-1.5 px-3 py-2 transition-colors',
+              on ? 'bg-cyan-600 font-medium text-white' : 'text-slate-600 hover:bg-slate-50',
             )}
           >
             {o.dot && <span className={cn('h-1.5 w-1.5 rounded-full', on ? 'bg-white' : o.dot)} />}
             {o.label}
-            <span className={cn('tabular-nums', on ? 'opacity-90' : 'opacity-50')}>{counts[o.key]}</span>
+            <span className={cn('tabular-nums text-xs', on ? 'opacity-90' : 'text-slate-400')}>{counts[o.key]}</span>
           </button>
         )
       })}
@@ -253,28 +243,34 @@ export default function PreviewTurnosDialog({
     <Dialog open={open} onOpenChange={(o) => !o && onCancel()}>
       <DialogContent className="flex max-h-[90vh] max-w-5xl flex-col gap-0 overflow-hidden p-0">
         {/* Encabezado */}
-        <DialogHeader className="space-y-0 border-b px-6 pb-4 pt-6 text-left">
+        <DialogHeader className="space-y-0 border-b border-slate-100 px-6 pb-4 pt-6 text-left">
           <div className="flex items-center gap-2.5">
+            <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-slate-900 text-white">
+              <Icon icon="solar:clipboard-check-bold" width={18} />
+            </span>
+            <DialogTitle className="text-lg">Revisar carga de turnos</DialogTitle>
             <span
               className={cn(
-                'inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-semibold',
+                'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold',
                 acabados ? 'bg-violet-100 text-violet-700' : maquinas ? 'bg-teal-100 text-teal-700' : 'bg-indigo-100 text-indigo-700',
               )}
             >
-              {acabados ? <Target className="h-3.5 w-3.5" /> : maquinas ? <Cog className="h-3.5 w-3.5" /> : <Clock className="h-3.5 w-3.5" />}
+              <Icon
+                icon={acabados ? 'solar:target-bold' : maquinas ? 'solar:settings-bold' : 'solar:clock-circle-bold'}
+                width={13}
+              />
               {acabados ? 'Acabados' : maquinas ? 'Máquinas' : 'General'}
             </span>
-            <DialogTitle className="text-lg">Revisar carga de turnos</DialogTitle>
           </div>
           <DialogDescription className="mt-1">
-            Período <b className="text-foreground">{desde}</b> – <b className="text-foreground">{hasta}</b> · {filas.length} filas ·
-            revisa antes de aplicar.
+            Período <b className="text-slate-800 tabular-nums">{desde}</b> – <b className="text-slate-800 tabular-nums">{hasta}</b> ·{' '}
+            {filas.length} filas · revisa antes de aplicar. Haz clic en un contador para filtrar.
           </DialogDescription>
 
           {/* Chips de estado (filtran) */}
           <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
             <StatChip
-              Icon={ListChecks}
+              icon="solar:list-check-bold"
               label="Total"
               value={filas.length}
               tone="neutral"
@@ -282,7 +278,7 @@ export default function PreviewTurnosDialog({
               onClick={() => setFEstado('TODOS')}
             />
             <StatChip
-              Icon={CheckCircle2}
+              icon="solar:check-circle-bold"
               label="OK"
               value={conteos.est.ok}
               tone="ok"
@@ -290,7 +286,7 @@ export default function PreviewTurnosDialog({
               onClick={() => setFEstado(fEstado === 'ok' ? 'TODOS' : 'ok')}
             />
             <StatChip
-              Icon={AlertTriangle}
+              icon="solar:danger-triangle-bold"
               label="Avisos"
               value={conteos.est.aviso}
               tone="aviso"
@@ -298,7 +294,7 @@ export default function PreviewTurnosDialog({
               onClick={() => setFEstado(fEstado === 'aviso' ? 'TODOS' : 'aviso')}
             />
             <StatChip
-              Icon={XCircle}
+              icon="solar:close-circle-bold"
               label="Errores"
               value={conteos.est.error}
               tone="error"
@@ -309,28 +305,16 @@ export default function PreviewTurnosDialog({
         </DialogHeader>
 
         {/* Toolbar: búsqueda + filtro de tipo */}
-        <div className="flex flex-wrap items-center gap-3 border-b bg-muted/30 px-6 py-3">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={texto}
-              onChange={(e) => setTexto(e.target.value)}
-              placeholder="Buscar empleado…"
-              className="h-9 w-64 bg-background pl-9 pr-8"
-            />
-            {texto && (
-              <button
-                type="button"
-                onClick={() => setTexto('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                aria-label="Limpiar búsqueda"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
+        <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 bg-slate-50/70 px-6 py-3">
+          <TableSearch
+            value={texto}
+            onChange={setTexto}
+            placeholder="Buscar empleado…"
+            className="w-64"
+            testId="rh-carga-turnos__preview-busqueda"
+          />
           <TipoFilter value={fTipo} onChange={setFTipo} counts={conteos.tip} />
-          <span className="ml-auto text-xs text-muted-foreground">
+          <span className="ml-auto rounded-full bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-500">
             {visiblesCount} de {filas.length} · {grupos.length} empleado{grupos.length === 1 ? '' : 's'}
           </span>
         </div>
@@ -338,9 +322,8 @@ export default function PreviewTurnosDialog({
         {/* Cuerpo scrolleable */}
         <div className="flex-1 overflow-auto">
           {grupos.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-2 py-20 text-center text-muted-foreground">
-              <Search className="h-8 w-8 opacity-40" />
-              <p className="text-sm">Sin filas para estos filtros.</p>
+            <div className="flex flex-col items-center">
+              <EmptyState icon="solar:magnifer-bold" title="Sin filas para estos filtros." className="pb-3" />
               <button
                 type="button"
                 onClick={() => {
@@ -348,7 +331,7 @@ export default function PreviewTurnosDialog({
                   setFEstado('TODOS')
                   setFTipo('TODOS')
                 }}
-                className="text-xs font-medium text-foreground underline-offset-2 hover:underline"
+                className="mb-16 text-xs font-medium text-sky-500 underline-offset-2 hover:text-sky-600 hover:underline"
               >
                 Limpiar filtros
               </button>
@@ -356,7 +339,7 @@ export default function PreviewTurnosDialog({
           ) : (
             <table className="w-full border-separate border-spacing-0 text-sm">
               <thead ref={theadRef} className="sticky top-0 z-10">
-                <tr className="bg-background/95 backdrop-blur [&>th]:border-b [&>th]:px-4 [&>th]:py-2 [&>th]:text-left [&>th]:text-[11px] [&>th]:font-medium [&>th]:uppercase [&>th]:tracking-wide [&>th]:text-muted-foreground">
+                <tr className="bg-slate-50/95 backdrop-blur [&>th]:border-b [&>th]:border-slate-100 [&>th]:px-4 [&>th]:py-2.5 [&>th]:text-left [&>th]:text-xs [&>th]:font-semibold [&>th]:uppercase [&>th]:tracking-wide [&>th]:text-slate-500">
                   <th className="w-32">Fecha</th>
                   <th className="w-28">Tipo</th>
                   <th className="w-28">Horario</th>
@@ -396,29 +379,31 @@ export default function PreviewTurnosDialog({
         </div>
 
         {/* Pie */}
-        <div className="flex items-center justify-between gap-3 border-t px-6 py-4">
-          <p className="text-xs text-muted-foreground">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-6 py-4">
+          <p className="text-xs text-slate-500">
             {bloqueado ? (
-              <span className="font-medium text-rose-600">
+              <span className="inline-flex items-center gap-1.5 font-medium text-rose-600">
+                <Icon icon="solar:danger-triangle-bold" width={14} />
                 Corrige los {preview?.totalErrores} errores en el Excel y vuelve a subirlo.
               </span>
             ) : (
               <>
-                <b className="text-foreground">{trabajados}</b> días de trabajo se aplicarán
+                <b className="text-slate-800 tabular-nums">{trabajados}</b> días de trabajo se aplicarán
                 {conteos.est.aviso > 0 && <> · {conteos.est.aviso} con aviso</>}.
               </>
             )}
           </p>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={onCancel} disabled={aplicando} className="gap-2">
-              <X className="h-4 w-4" /> Cancelar
+            <Button variant="outline" onClick={onCancel} disabled={aplicando} data-testid="rh-carga-turnos__btn-cancelar">
+              <Icon icon="solar:close-circle-linear" width={16} /> Cancelar
             </Button>
             <Button
               onClick={onConfirm}
               disabled={bloqueado || aplicando}
-              className="gap-2 bg-emerald-600 text-white hover:bg-emerald-700"
+              className="bg-emerald-600 text-white hover:bg-emerald-700"
+              data-testid="rh-carga-turnos__btn-aplicar"
             >
-              {aplicando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+              <Icon icon={aplicando ? 'svg-spinners:180-ring' : 'solar:check-circle-bold'} width={16} />
               {aplicando ? 'Aplicando…' : 'Confirmar y aplicar'}
             </Button>
           </div>
@@ -457,23 +442,24 @@ function FragmentGroup({
   return (
     <>
       <tr className="sticky z-[5]" style={{ top: stickyTop }}>
-        <td colSpan={cols} className="border-y bg-muted px-4 py-2">
+        <td colSpan={cols} className="border-y border-slate-200 bg-slate-100 px-4 py-2">
           <div className="flex items-center gap-2">
+            <Icon icon="solar:user-bold" width={14} className="text-slate-400" />
             <Nombre nombre={nombre} />
-            <span className="rounded-full bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border">
+            <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-500 ring-1 ring-slate-200">
               {dias} día{dias === 1 ? '' : 's'}
             </span>
             {maquinas &&
               (equipo != null ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-teal-100 px-1.5 py-0.5 text-[10px] font-medium text-teal-700">
-                  <Cog className="h-3 w-3" /> Equipo {equipo}
+                <span className="inline-flex items-center gap-1 rounded-full bg-teal-100 px-2 py-0.5 text-[10px] font-semibold text-teal-700">
+                  <Icon icon="solar:settings-bold" width={11} /> Equipo {equipo}
                 </span>
               ) : (
-                <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">sin cuadrilla</span>
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">sin cuadrilla</span>
               ))}
             {acabados && metaTotal > 0 && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-medium text-violet-700">
-                <Target className="h-3 w-3" /> {fmtMeta(metaTotal)}
+              <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-700">
+                <Icon icon="solar:target-bold" width={11} /> {fmtMeta(metaTotal)}
               </span>
             )}
             <span className="ml-auto flex items-center gap-1">
@@ -489,48 +475,47 @@ function FragmentGroup({
           <tr
             key={`${f.idEmpleado}-${f.fecha}`}
             className={cn(
-              '[&>td]:border-b [&>td]:px-4 [&>td]:py-1.5 [&>td]:align-middle',
-              est === 'error' && 'bg-rose-50/70',
-              est === 'aviso' && 'bg-amber-50/60',
+              'transition-colors [&>td]:border-b [&>td]:border-slate-100 [&>td]:px-4 [&>td]:py-2 [&>td]:align-middle',
+              est === 'error' ? 'bg-rose-50/70' : est === 'aviso' ? 'bg-amber-50/60' : 'hover:bg-slate-50/80',
             )}
           >
-            <td className="whitespace-nowrap tabular-nums text-xs">
-              <span className="text-muted-foreground">{diaDe(f.fecha)}</span> {f.fecha.slice(5)}
+            <td className="whitespace-nowrap text-xs tabular-nums text-slate-700">
+              <span className="text-slate-400">{diaDe(f.fecha)}</span> {f.fecha.slice(5)}
             </td>
             <td>
               <TipoBadge tipo={f.tipo} />
             </td>
-            <td className="whitespace-nowrap tabular-nums text-xs text-muted-foreground">
+            <td className="whitespace-nowrap text-xs tabular-nums text-slate-600">
               {f.horaInicio ? `${fmtHora(f.horaInicio)}–${fmtHora(f.horaFin)}` : '—'}
             </td>
-            {acabados && <td className="tabular-nums text-xs">{f.metaDia != null ? fmtMeta(f.metaDia) : '—'}</td>}
-            {maquinas && <td className="tabular-nums text-xs">{f.numTurno ?? '—'}</td>}
+            {acabados && <td className="text-xs tabular-nums text-slate-700">{f.metaDia != null ? fmtMeta(f.metaDia) : '—'}</td>}
+            {maquinas && <td className="text-xs tabular-nums text-slate-700">{f.numTurno ?? '—'}</td>}
             {maquinas && (
               <td className="text-xs">
                 {f.maquina != null ? (
-                  <span className="inline-flex items-center gap-1 tabular-nums">
-                    <Cog className="h-3 w-3 text-muted-foreground" /> {f.maquina}
+                  <span className="inline-flex items-center gap-1 tabular-nums text-slate-700">
+                    <Icon icon="solar:settings-bold" width={12} className="text-slate-400" /> {f.maquina}
                   </span>
                 ) : (
-                  <span className="text-muted-foreground">—</span>
+                  <span className="text-slate-400">—</span>
                 )}
               </td>
             )}
-            <td className="tabular-nums text-xs text-muted-foreground">{f.sistema ?? '—'}</td>
+            <td className="text-xs tabular-nums text-slate-500">{f.sistema ?? '—'}</td>
             <td className="text-xs">
               {est === 'error' ? (
-                <span className="inline-flex items-center gap-1 text-rose-700">
-                  <XCircle className="h-3.5 w-3.5 shrink-0" />
+                <span className="inline-flex items-center gap-1 font-medium text-rose-700">
+                  <Icon icon="solar:close-circle-bold" width={14} className="shrink-0" />
                   {f.errores[0]}
                 </span>
               ) : est === 'aviso' ? (
-                <span className="inline-flex items-center gap-1 text-amber-700">
-                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                <span className="inline-flex items-center gap-1 font-medium text-amber-700">
+                  <Icon icon="solar:danger-triangle-bold" width={14} className="shrink-0" />
                   {f.avisos[0]}
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1 text-emerald-600">
-                  <Check className="h-3.5 w-3.5" /> OK
+                <span className="inline-flex items-center gap-1 font-medium text-emerald-600">
+                  <Icon icon="solar:check-circle-bold" width={14} /> OK
                 </span>
               )}
             </td>

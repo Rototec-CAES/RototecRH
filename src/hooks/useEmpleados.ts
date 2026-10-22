@@ -1,6 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { empleadosApi } from '@/api/employees'
-import type { BajaInput, CreateEmpleadoInput, CreateEmpleadoResponse, EmpleadoInput } from '@/types'
+import { actualizacionMasivaApi } from '@/api/actualizacionMasiva'
+import type {
+  BajaInput,
+  CreateEmpleadoInput,
+  CreateEmpleadoResponse,
+  EmpleadoInput,
+  FilaActualizacionMasiva,
+} from '@/types'
 
 const QK = {
   all: ['empleados'] as const,
@@ -100,6 +107,33 @@ export function useReactivar(id: string) {
     mutationFn: () => empleadosApi.reactivar(id),
     onSuccess: (updated) => {
       qc.setQueryData(QK.one(id), updated)
+      qc.invalidateQueries({ queryKey: QK.all })
+    },
+  })
+}
+
+// ───────── Actualización masiva (Excel) ─────────
+
+/** Plantilla de actualización masiva (columnas + valores actuales de los activos). */
+export function usePlantillaActualizacionMasiva() {
+  return useQuery({
+    queryKey: [...QK.all, 'actualizacion-masiva', 'plantilla'] as const,
+    queryFn: () => actualizacionMasivaApi.plantilla(),
+    staleTime: 0,
+  })
+}
+
+export function useValidarActualizacionMasiva() {
+  return useMutation({
+    mutationFn: (filas: FilaActualizacionMasiva[]) => actualizacionMasivaApi.validar(filas),
+  })
+}
+
+export function useAplicarActualizacionMasiva() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (filas: FilaActualizacionMasiva[]) => actualizacionMasivaApi.aplicar(filas),
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: QK.all })
     },
   })
