@@ -9,6 +9,9 @@ import type {
   PensumModuloArbol, PensumTemaArbol,
   Evaluacion, EvaluacionDetalle, EvaluacionInput, UpdateEvaluacionInput, ArchivoSubido,
   Pregunta, PreguntaInput, Respuesta, RespuestaInput,
+  CargaMasivaPreguntasInput, CargaMasivaPreguntasResult,
+  DocumentoCap, DocumentoBiblioteca, CrearDocumentoInput,
+  ElegibleSala, SalaResumen, SalaDetalle, CrearSalaInput, SalaPublica,
   EmpleadoCapResumen, EmpleadoCapDetalle,
   GenerarExamenInput, GenerarExamenResult,
   ExamenPublico, EnviarRespuestasInput, ResultadoExamen, EstadoModulo,
@@ -27,7 +30,11 @@ const K = {
   empleados: 'rototec.cap.empleados.v1',
   tokens: 'rototec.cap.tokens.v1',
   asignaciones: 'rototec.cap.asignaciones.v1',
+  documentos: 'rototec.cap.documentos.v1',
+  ligasDocumentos: 'rototec.cap.ligas-documentos.v1',
 }
+interface LigaDocumentoRow { id: number; idModulo: number; idDocumento: number }
+const SIN_MOCK = 'Las salas de examen no están disponibles en modo demo'
 function read<T>(key: string, seed: () => T[] = () => []): T[] {
   if (typeof window === 'undefined') return []
   try {
@@ -43,7 +50,7 @@ function nextId<T extends { id: number }>(rows: T[]): number {
 }
 function delay(ms = 120) { return new Promise((r) => setTimeout(r, ms)) }
 
-/** Alias del bucket R2 (cloudflare-service-layer) donde viven los videos de evaluación. */
+/** Alias del bucket R2 (cloudflare-service-layer) donde viven los videos y el material de capacitación. */
 const BUCKET_VIDEOS = 'capacitaciones'
 /** Evaluaciones guardadas antes del modo VIDEO no traen modo/video. */
 function normalizarEvaluacion(ev: Partial<Evaluacion> & Pick<Evaluacion, 'id' | 'idModulo' | 'nombre'>): Evaluacion {
@@ -51,7 +58,7 @@ function normalizarEvaluacion(ev: Partial<Evaluacion> & Pick<Evaluacion, 'id' | 
 }
 
 // Mock raw rows
-interface ModuloRow extends ModuloInput { id: number; idPensum: number }
+interface ModuloRow extends ModuloInput { id: number; idPensum: number; orden?: number }
 interface TemaRow extends TemaInput { id: number; idModulo: number }
 
 // Seed empleados (raw — not EmpleadoCapResumen, that is derived)
@@ -121,15 +128,24 @@ function seedAsignaciones(): AsignacionRow[] {
 }
 
 // ============ Mock helpers to build trees ============
+function documentosDeModulo(idModulo: number): DocumentoCap[] {
+  const docs = read<DocumentoCap>(K.documentos)
+  return read<LigaDocumentoRow>(K.ligasDocumentos)
+    .filter((l) => l.idModulo === idModulo)
+    .flatMap((l) => docs.filter((d) => d.id === l.idDocumento))
+}
 function buildPensumArbol(p: Pensum): PensumArbol {
-  const modulos = read<ModuloRow>(K.modulos, seedModulos).filter((m) => m.idPensum === p.id)
+  const modulos = read<ModuloRow>(K.modulos, seedModulos)
+    .filter((m) => m.idPensum === p.id)
+    .sort((a, b) => (a.orden ?? a.id) - (b.orden ?? b.id))
   const temas = read<TemaRow>(K.temas)
-  const modulosArbol: PensumModuloArbol[] = modulos.map((m) => ({
-    id: m.id, modulo: m.modulo, objetivo: m.objetivo ?? null,
+  const modulosArbol: PensumModuloArbol[] = modulos.map((m, i) => ({
+    id: m.id, orden: i + 1, modulo: m.modulo, objetivo: m.objetivo ?? null,
     duracionHoras: m.duracionHoras ?? null, capacitador: m.capacitador ?? null,
     tipoEvaluacion: m.tipoEvaluacion ?? null, instrumentos: m.instrumentos ?? null,
     porcentajeAprobacion: m.porcentajeAprobacion ?? null, vigencia: m.vigencia ?? null,
     bono: m.bono ?? null,
+    documentos: documentosDeModulo(m.id),
     temas: temas.filter((t) => t.idModulo === m.id).map<PensumTemaArbol>((t) => ({
       id: t.id, tema: t.tema ?? null, modalidad: t.modalidad ?? null, recursos: t.recursos ?? null,
     })),
@@ -223,6 +239,12 @@ const mockApi = {
   async deleteModulo(id: number): Promise<{ id: number }> {
     await delay(); write(K.modulos, read<ModuloRow>(K.modulos, seedModulos).filter((x) => x.id !== id)); return { id }
   },
+  async reordenarModulos(idPensum: number, ids: number[]): Promise<{ id: number; orden: number }[]> {
+    await delay()
+    const pos = new Map(ids.map((id, i) => [id, i + 1]))
+    write(K.modulos, read<ModuloRow>(K.modulos, seedModulos).map((m) => (m.idPensum === idPensum && pos.has(m.id) ? { ...m, orden: pos.get(m.id) } : m)))
+    return ids.map((id, i) => ({ id, orden: i + 1 }))
+  },
   // -- Temas --
   async createTema(idModulo: number, input: TemaInput): Promise<PensumTemaArbol> {
     await delay()
@@ -262,6 +284,65 @@ const mockApi = {
     for (const pct of [25, 50, 75, 100]) { await delay(150); onProgress?.(pct) }
     return { key: `${file.name}-${Date.now().toString(36)}`, url: URL.createObjectURL(file) }
   },
+  async subirArchivo(file: File, onProgress?: (pct: number) => void): Promise<ArchivoSubido> {
+    return mockApi.subirVideo(file, onProgress)
+  },
+  // -- Biblioteca de material --
+  async listDocumentos(): Promise<DocumentoBiblioteca[]> {
+    await delay()
+    const ligas = read<LigaDocumentoRow>(K.ligasDocumentos)
+    return read<DocumentoCap>(K.documentos)
+      .map((d) => ({ ...d, modulos: ligas.filter((l) => l.idDocumento === d.id).length }))
+      .reverse()
+  },
+  async createDocumento(input: CrearDocumentoInput): Promise<DocumentoCap> {
+    await delay()
+    const rows = read<DocumentoCap>(K.documentos)
+    const ext = input.nombreArchivo.includes('.') ? input.nombreArchivo.split('.').pop()?.toLowerCase() ?? null : null
+    const doc: DocumentoCap = {
+      id: nextId(rows), nombre: input.nombre, descripcion: input.descripcion ?? null, nombreArchivo: input.nombreArchivo,
+      extension: ext, tipoMime: input.tipoMime ?? null, tamano: input.tamano ?? null, url: input.url, creadoEn: new Date().toISOString(),
+    }
+    write(K.documentos, [...rows, doc])
+    if (input.idModulo !== undefined) await mockApi.vincularDocumento(input.idModulo, doc.id)
+    return doc
+  },
+  async updateDocumento(id: number, input: { nombre?: string; descripcion?: string | null }): Promise<DocumentoCap> {
+    await delay()
+    const rows = read<DocumentoCap>(K.documentos)
+    const i = rows.findIndex((d) => d.id === id); if (i === -1) throw new Error('Documento no encontrado')
+    rows[i] = { ...rows[i], ...Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined)) }
+    write(K.documentos, rows); return rows[i]
+  },
+  async deleteDocumento(id: number): Promise<{ id: number; modulos: number }> {
+    await delay()
+    const ligas = read<LigaDocumentoRow>(K.ligasDocumentos)
+    write(K.ligasDocumentos, ligas.filter((l) => l.idDocumento !== id))
+    write(K.documentos, read<DocumentoCap>(K.documentos).filter((d) => d.id !== id))
+    return { id, modulos: ligas.filter((l) => l.idDocumento === id).length }
+  },
+  async vincularDocumento(idModulo: number, idDocumento: number): Promise<{ idModulo: number; idDocumento: number }> {
+    await delay()
+    const ligas = read<LigaDocumentoRow>(K.ligasDocumentos)
+    if (!ligas.some((l) => l.idModulo === idModulo && l.idDocumento === idDocumento)) {
+      write(K.ligasDocumentos, [...ligas, { id: nextId(ligas), idModulo, idDocumento }])
+    }
+    return { idModulo, idDocumento }
+  },
+  async desvincularDocumento(idModulo: number, idDocumento: number): Promise<{ idModulo: number; idDocumento: number }> {
+    await delay()
+    write(K.ligasDocumentos, read<LigaDocumentoRow>(K.ligasDocumentos).filter((l) => !(l.idModulo === idModulo && l.idDocumento === idDocumento)))
+    return { idModulo, idDocumento }
+  },
+  // -- Salas de examen (sin mock) --
+  async elegiblesSala(idModulo: number): Promise<ElegibleSala[]> { void idModulo; throw new Error(SIN_MOCK) },
+  async listSalas(): Promise<SalaResumen[]> { await delay(); return [] },
+  async createSala(input: CrearSalaInput): Promise<SalaDetalle> { void input; throw new Error(SIN_MOCK) },
+  async getSala(id: number): Promise<SalaDetalle> { void id; throw new Error(SIN_MOCK) },
+  async cerrarSala(id: number): Promise<SalaDetalle> { void id; throw new Error(SIN_MOCK) },
+  async desbloquearParticipante(idSala: number, idParticipante: number): Promise<SalaDetalle> { void idSala; void idParticipante; throw new Error(SIN_MOCK) },
+  async getSalaPublica(codigo: string): Promise<SalaPublica> { void codigo; throw new Error(SIN_MOCK) },
+  async ingresarSala(codigo: string, input: { idParticipante: number; dpi4: string }): Promise<{ token: string }> { void codigo; void input; throw new Error(SIN_MOCK) },
   async deleteEvaluacion(id: number): Promise<{ id: number }> {
     await delay(); write(K.evals, read<Evaluacion>(K.evals).filter((e) => e.id !== id)); return { id }
   },
@@ -270,6 +351,22 @@ const mockApi = {
     const rows = read<Pregunta>(K.preguntas)
     const p: Pregunta = { id: nextId(rows), idEvaluacion, pregunta: input.pregunta, puntosPorRespuesta: input.puntosPorRespuesta ?? null, idTema: input.idTema ?? null, respuestas: [] }
     write(K.preguntas, [...rows, p]); return p
+  },
+  async cargarPreguntas(idEvaluacion: number, input: CargaMasivaPreguntasInput): Promise<CargaMasivaPreguntasResult> {
+    await delay()
+    let preguntas = read<Pregunta>(K.preguntas)
+    let respuestas = read<Respuesta>(K.respuestas)
+    const eliminadas = input.reemplazar ? preguntas.filter((p) => p.idEvaluacion === idEvaluacion).length : 0
+    if (input.reemplazar) preguntas = preguntas.filter((p) => p.idEvaluacion !== idEvaluacion)
+    let total = 0
+    for (const q of input.preguntas) {
+      const p: Pregunta = { id: nextId(preguntas), idEvaluacion, pregunta: q.pregunta, puntosPorRespuesta: q.puntosPorRespuesta, idTema: null, respuestas: [] }
+      preguntas = [...preguntas, p]
+      for (const r of q.respuestas) respuestas = [...respuestas, { id: nextId(respuestas), idPregunta: p.id, ...r }]
+      total += q.respuestas.length
+    }
+    write(K.preguntas, preguntas); write(K.respuestas, respuestas)
+    return { preguntas: input.preguntas.length, respuestas: total, eliminadas }
   },
   async deletePregunta(id: number): Promise<{ id: number }> {
     await delay(); write(K.preguntas, read<Pregunta>(K.preguntas).filter((p) => p.id !== id)); return { id }
@@ -487,12 +584,17 @@ const realApi: typeof mockApi = {
   async createModulo(idPensum, input) { const { data } = await api.post<PensumModuloArbol>(`/capacitaciones/pensums/${idPensum}/modulos`, input); return data },
   async updateModulo(id, input) { const { data } = await api.put<{ id: number }>(`/capacitaciones/pensums/modulos/${id}`, input); return data },
   async deleteModulo(id) { const { data } = await api.delete<{ id: number }>(`/capacitaciones/pensums/modulos/${id}`); return data },
+  async reordenarModulos(idPensum, ids) {
+    const { data } = await api.put<{ id: number; orden: number }[]>(`/capacitaciones/pensums/${idPensum}/modulos/orden`, { ids })
+    return data
+  },
   async createTema(idModulo, input) { const { data } = await api.post<PensumTemaArbol>(`/capacitaciones/pensums/modulos/${idModulo}/temas`, input); return data },
   async deleteTema(id) { const { data } = await api.delete<{ id: number }>(`/capacitaciones/pensums/temas/${id}`); return data },
   async getEvaluacion(idModulo) { const { data } = await api.get<EvaluacionDetalle | null>(`/capacitaciones/modulos/${idModulo}/evaluacion`); return data },
   async createEvaluacion(input) { const { data } = await api.post<Evaluacion>('/capacitaciones/evaluaciones', input); return data },
   async updateEvaluacion(id, input) { const { data } = await api.put<Evaluacion>(`/capacitaciones/evaluaciones/${id}`, input); return data },
-  async subirVideo(file, onProgress) {
+  async subirVideo(file, onProgress) { return realApi.subirArchivo(file, onProgress) },
+  async subirArchivo(file, onProgress) {
     const form = new FormData()
     form.append('file', file)
     // El gateway rutea /cloudflare → cloudflare-service-layer, que responde { ok, message, data }.
@@ -504,8 +606,38 @@ const realApi: typeof mockApi = {
     })
     return data.data
   },
+  async listDocumentos() { const { data } = await api.get<DocumentoBiblioteca[]>('/capacitaciones/documentos'); return data },
+  async createDocumento(input) { const { data } = await api.post<DocumentoCap>('/capacitaciones/documentos', input); return data },
+  async updateDocumento(id, input) { const { data } = await api.put<DocumentoCap>(`/capacitaciones/documentos/${id}`, input); return data },
+  async deleteDocumento(id) { const { data } = await api.delete<{ id: number; modulos: number }>(`/capacitaciones/documentos/${id}`); return data },
+  async vincularDocumento(idModulo, idDocumento) {
+    const { data } = await api.post<{ idModulo: number; idDocumento: number }>(`/capacitaciones/modulos/${idModulo}/documentos`, { idDocumento })
+    return data
+  },
+  async desvincularDocumento(idModulo, idDocumento) {
+    const { data } = await api.delete<{ idModulo: number; idDocumento: number }>(`/capacitaciones/modulos/${idModulo}/documentos/${idDocumento}`)
+    return data
+  },
+  async elegiblesSala(idModulo) { const { data } = await api.get<ElegibleSala[]>('/capacitaciones/salas/elegibles', { params: { idModulo } }); return data },
+  async listSalas() { const { data } = await api.get<SalaResumen[]>('/capacitaciones/salas'); return data },
+  async createSala(input) { const { data } = await api.post<SalaDetalle>('/capacitaciones/salas', input); return data },
+  async getSala(id) { const { data } = await api.get<SalaDetalle>(`/capacitaciones/salas/${id}`); return data },
+  async cerrarSala(id) { const { data } = await api.post<SalaDetalle>(`/capacitaciones/salas/${id}/cerrar`); return data },
+  async desbloquearParticipante(idSala, idParticipante) {
+    const { data } = await api.post<SalaDetalle>(`/capacitaciones/salas/${idSala}/participantes/${idParticipante}/desbloquear`)
+    return data
+  },
+  async getSalaPublica(codigo) { const { data } = await publicApi.get<SalaPublica>(`/capacitaciones/sala/${encodeURIComponent(codigo)}`); return data },
+  async ingresarSala(codigo, input) {
+    const { data } = await publicApi.post<{ token: string }>(`/capacitaciones/sala/${encodeURIComponent(codigo)}/ingresar`, input)
+    return data
+  },
   async deleteEvaluacion(id) { const { data } = await api.delete<{ id: number }>(`/capacitaciones/evaluaciones/${id}`); return data },
   async createPregunta(idEvaluacion, input) { const { data } = await api.post<Pregunta>(`/capacitaciones/evaluaciones/${idEvaluacion}/preguntas`, input); return data },
+  async cargarPreguntas(idEvaluacion, input) {
+    const { data } = await api.post<CargaMasivaPreguntasResult>(`/capacitaciones/evaluaciones/${idEvaluacion}/preguntas/masivo`, input)
+    return data
+  },
   async deletePregunta(id) { const { data } = await api.delete<{ id: number }>(`/capacitaciones/preguntas/${id}`); return data },
   async createRespuesta(idPregunta, input) { const { data } = await api.post<Respuesta>(`/capacitaciones/preguntas/${idPregunta}/respuestas`, input); return data },
   async deleteRespuesta(id) { const { data } = await api.delete<{ id: number }>(`/capacitaciones/respuestas/${id}`); return data },

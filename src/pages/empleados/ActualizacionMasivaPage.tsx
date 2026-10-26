@@ -36,7 +36,7 @@ import {
   descargarPlantillaActualizacionMasiva,
   leerArchivoActualizacionMasiva,
 } from '@/lib/actualizacionMasivaExcel'
-import { cn, formatQ } from '@/lib/utils'
+import { cn, formatDate, formatQ } from '@/lib/utils'
 import type {
   CambioActualizacionMasiva,
   FilaActualizacionMasiva,
@@ -60,6 +60,7 @@ function mostrarValor(c: CambioActualizacionMasiva, v: CambioActualizacionMasiva
   if (v === null || v === '') return '(vacío)'
   if (typeof v === 'boolean') return v ? 'Sí' : 'No'
   if (typeof v === 'number' && CAMPOS_MONEDA.has(c.campo)) return formatQ(v)
+  if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) return formatDate(v)
   return String(v)
 }
 

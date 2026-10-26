@@ -31,7 +31,7 @@ const relleno = (argb: string): ExcelJS.Fill => ({ type: 'pattern', pattern: 'so
 const TIPO_TEXTO: Record<CampoActualizacionMasiva['tipo'], string> = {
   texto: 'Texto',
   numero: 'Número (sin Q ni comas)',
-  fecha: 'Fecha AAAA-MM-DD',
+  fecha: 'Fecha DD-MM-AAAA',
   booleano: 'Sí / No',
   catalogo: 'Lista',
   banco: 'Código de banco (lista)',
@@ -169,7 +169,7 @@ export async function descargarPlantillaActualizacionMasiva(p: PlantillaActualiz
     '1. Edite las columnas de encabezado AZUL de la hoja "Empleados". La columna GRIS (ID) es la llave del empleado.',
     '2. NO modifique ni borre la columna ID: es la llave que identifica a cada empleado.',
     '3. Celda VACÍA = el dato NO cambia. Con este archivo no se puede borrar un dato existente.',
-    '4. Fechas en formato AAAA-MM-DD (ej. 2024-01-15). Números sin "Q" ni separador de miles.',
+    '4. Fechas en formato DD-MM-AAAA (ej. 15-01-2024). Números sin "Q" ni separador de miles.',
     '5. Sí/No para las columnas de habilitar y Activo. Las listas desplegables muestran los valores permitidos. Puesto y Departamento: elija "ID - Nombre" de la lista (hay nombres repetidos entre empresas).',
     '6. Para dar de baja: Activo = No, con Tipo de baja y Fecha de baja (último día laborado). Motivo de baja es opcional.',
     '7. Puede borrar las filas de empleados que no quiera actualizar. No agregue empleados nuevos.',

@@ -349,7 +349,7 @@ export const empleadoCreateSchema = z
     jornada: reqStr('Selecciona la jornada'),
     temporalidad_contrato: reqStr('Selecciona una opción'),
     tipo_contrato: reqStr('Selecciona una opción'),
-    // La fecha de contratación puede ser futura (contrataciones programadas).
+    // La fecha de ingreso puede ser futura (contrataciones programadas).
     fecha_contratacion: isoDate,
     fecha_reingreso: z.string().optional().or(z.literal('')).refine(
       (v) => !v || !Number.isNaN(new Date(v).getTime()),
@@ -359,7 +359,7 @@ export const empleadoCreateSchema = z
     profesion: optStr(100),
     titulo: optStr(60),
     forma_pago: reqStr('Selecciona la forma de pago'),
-    frecuencia_pago: z.enum(['QUINCENAL', 'MENSUAL'], { message: 'Selecciona la frecuencia de pago' }),
+    frecuencia_pago: z.enum(['QUINCENAL', 'MENSUAL'], { message: 'Selecciona el tipo de nómina' }),
     codigo_banco: z.string().optional().or(z.literal('')),
     numero_cuenta: z.string().optional().or(z.literal('')),
     tipo_cuenta: z.string().optional().or(z.literal('')),

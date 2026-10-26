@@ -21,6 +21,7 @@ import { EmptyState } from '@/components/shared/DataTable'
 import { confirmar } from '@/components/shared/ConfirmDialog'
 import { Tag } from '@/shared/report/report-ui'
 import {
+  useCargarPreguntas,
   useCreateEvaluacion,
   useCreatePregunta,
   useCreateRespuesta,
@@ -37,6 +38,7 @@ import {
   type PreguntaFormValues,
   type RespuestaFormValues,
 } from '@/lib/validators'
+import { descargarPlantillaPreguntas, leerArchivoPreguntas, type LecturaPreguntas } from '@/lib/preguntasExcel'
 import type { Evaluacion, ModoEvaluacion, Pregunta } from '@/types'
 
 interface Props {
@@ -121,7 +123,14 @@ export function ModuloEvaluacionDialog({ idModulo, open, onOpenChange }: Props) 
             ) : (
               <>
                 {idModulo !== undefined && (
-                  <NuevaPregunta idModulo={idModulo} idEvaluacion={data.evaluacion.id} />
+                  <>
+                    <CargaMasivaPreguntas
+                      idModulo={idModulo}
+                      evaluacion={data.evaluacion}
+                      preguntasActuales={data.preguntas.length}
+                    />
+                    <NuevaPregunta idModulo={idModulo} idEvaluacion={data.evaluacion.id} />
+                  </>
                 )}
 
                 {data.preguntas.length === 0 ? (
@@ -332,6 +341,150 @@ function VideoEvaluacion({ idModulo, evaluacion }: { idModulo: number; evaluacio
           {evaluacion.videoUrl ? 'Reemplazar video' : 'Subir video'}
         </Button>
       </div>
+    </div>
+  )
+}
+
+function CargaMasivaPreguntas({
+  idModulo,
+  evaluacion,
+  preguntasActuales,
+}: {
+  idModulo: number
+  evaluacion: Evaluacion
+  preguntasActuales: number
+}) {
+  const cargarMut = useCargarPreguntas(idModulo)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [lectura, setLectura] = useState<(LecturaPreguntas & { archivo: string }) | null>(null)
+  const [leyendo, setLeyendo] = useState(false)
+  const [descargando, setDescargando] = useState(false)
+  const [reemplazar, setReemplazar] = useState(false)
+
+  async function onDescargar() {
+    setDescargando(true)
+    try {
+      await descargarPlantillaPreguntas(evaluacion.nombre)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'No se pudo generar la plantilla')
+    } finally {
+      setDescargando(false)
+    }
+  }
+
+  async function onFile(file: File | undefined) {
+    if (inputRef.current) inputRef.current.value = ''
+    if (!file) return
+    setLeyendo(true)
+    try {
+      setLectura({ ...(await leerArchivoPreguntas(file)), archivo: file.name })
+      setReemplazar(false)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'No se pudo leer el archivo')
+    } finally {
+      setLeyendo(false)
+    }
+  }
+
+  async function onCargar() {
+    if (!lectura || lectura.errores.length) return
+    if (reemplazar) {
+      const ok = await confirmar({
+        titulo: `¿Reemplazar las ${preguntasActuales} preguntas actuales?`,
+        mensaje: 'Se borran las preguntas y respuestas actuales y se cargan las del archivo.',
+        textoConfirmar: 'Reemplazar',
+        peligro: true,
+      })
+      if (!ok) return
+    }
+    try {
+      const r = await cargarMut.mutateAsync({
+        idEvaluacion: evaluacion.id,
+        input: { preguntas: lectura.preguntas, reemplazar },
+      })
+      toast.success(
+        `${r.preguntas} pregunta(s) cargada(s)${r.eliminadas ? `; se reemplazaron ${r.eliminadas}` : ''}`,
+      )
+      setLectura(null)
+    } catch (err) {
+      toast.error(extractApiErrorMessage(err))
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        className="hidden"
+        onChange={(e) => onFile(e.target.files?.[0])}
+      />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="text-sm font-medium text-slate-800">Carga masiva desde Excel</p>
+          <p className="text-xs text-slate-500">Una fila por pregunta, hasta 6 respuestas y la letra de la correcta.</p>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={onDescargar} disabled={descargando}>
+            <Icon icon={descargando ? 'svg-spinners:180-ring' : 'solar:download-minimalistic-bold'} width={15} />
+            Descargar plantilla
+          </Button>
+          <Button size="sm" onClick={() => inputRef.current?.click()} disabled={leyendo || cargarMut.isPending}>
+            <Icon icon={leyendo ? 'svg-spinners:180-ring' : 'solar:upload-bold'} width={15} />
+            Subir Excel
+          </Button>
+        </div>
+      </div>
+
+      {lectura && (
+        <div className="mt-3 space-y-2 border-t border-slate-200 pt-3 text-sm">
+          <p className="flex items-center gap-1.5 text-slate-700">
+            <Icon icon="solar:file-text-bold" width={15} className="text-emerald-600" />
+            <span className="font-medium">{lectura.archivo}</span>: {lectura.preguntas.length} pregunta(s), {lectura.totalPuntos} puntos en total
+            {lectura.puntosRepartidos && ' (repartidos en partes iguales)'}
+          </p>
+          {lectura.errores.length > 0 ? (
+            <div className="rounded-lg border border-rose-200 bg-rose-50 p-2 text-xs text-rose-700">
+              <p className="mb-1 font-semibold">Corrija estos errores y vuelva a subir el archivo; no se cargó nada:</p>
+              <ul className="list-disc space-y-0.5 pl-4">
+                {lectura.errores.slice(0, 15).map((e) => (
+                  <li key={e}>{e}</li>
+                ))}
+                {lectura.errores.length > 15 && <li>… y {lectura.errores.length - 15} más</li>}
+              </ul>
+            </div>
+          ) : (
+            <>
+              {Math.abs(lectura.totalPuntos - 100) > 0.01 && (
+                <p className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+                  Los puntos suman {lectura.totalPuntos}, no 100. El módulo se aprueba comparando los puntos obtenidos con su % de aprobación.
+                </p>
+              )}
+              {preguntasActuales > 0 && (
+                <label className="flex items-center gap-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-slate-300 accent-rose-600"
+                    checked={reemplazar}
+                    onChange={(e) => setReemplazar(e.target.checked)}
+                  />
+                  Reemplazar las {preguntasActuales} preguntas actuales (si no, se agregan)
+                </label>
+              )}
+            </>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={() => setLectura(null)} disabled={cargarMut.isPending}>
+              Cancelar
+            </Button>
+            <Button size="sm" onClick={onCargar} disabled={lectura.errores.length > 0 || cargarMut.isPending}>
+              <Icon icon={cargarMut.isPending ? 'svg-spinners:180-ring' : 'solar:check-circle-bold'} width={15} />
+              Cargar {lectura.preguntas.length} pregunta(s)
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

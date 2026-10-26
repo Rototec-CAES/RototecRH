@@ -760,6 +760,8 @@ export interface PensumTemaArbol {
 }
 export interface PensumModuloArbol {
   id: number
+  /** Posición dentro del pensum (1 = primero). */
+  orden?: number
   modulo: string
   objetivo: string | null
   duracionHoras: number | null
@@ -770,6 +772,8 @@ export interface PensumModuloArbol {
   vigencia: number | null
   bono: boolean | null
   temas: PensumTemaArbol[]
+  /** Material de la biblioteca ligado al módulo, en su orden. */
+  documentos?: DocumentoCap[]
 }
 export interface PensumArbol {
   id: number
@@ -842,6 +846,88 @@ export interface UpdateEvaluacionInput {
   videoUrl?: string | null
   videoKey?: string | null
 }
+// ---------- Biblioteca de material ----------
+export interface DocumentoCap {
+  id: number
+  nombre: string
+  descripcion: string | null
+  nombreArchivo: string
+  extension: string | null
+  tipoMime: string | null
+  tamano: number | null
+  url: string
+  creadoEn: string
+}
+export interface DocumentoBiblioteca extends DocumentoCap {
+  /** Cuántos módulos lo usan. */
+  modulos: number
+}
+export interface CrearDocumentoInput {
+  nombre: string
+  descripcion?: string
+  nombreArchivo: string
+  tipoMime?: string
+  tamano?: number
+  url: string
+  archivoKey: string
+  /** Si viene, se liga de una vez a este módulo. */
+  idModulo?: number
+}
+
+// ---------- Salas de examen ----------
+export type EstadoSala = 'ABIERTA' | 'CERRADA' | 'VENCIDA'
+export type EstadoParticipanteSala = 'pendiente' | 'en_curso' | 'terminado'
+export interface ElegibleSala {
+  empleadoId: number
+  nombre: string
+  idAsignacionDetalle: number
+  estado: string
+  puntuacion: number | null
+  intentos: number
+  tieneDpi: boolean
+}
+export interface SalaResumen {
+  id: number
+  codigo: string
+  idModulo: number
+  modulo: string
+  pensum: string | null
+  estado: EstadoSala
+  expiraEn: string
+  creadoEn: string
+  cerradaEn: string | null
+  participantes: number
+  terminados: number
+}
+export interface ParticipanteSala {
+  id: number
+  empleadoId: number
+  nombre: string
+  tieneDpi: boolean
+  estado: EstadoParticipanteSala
+  bloqueado: boolean
+  ingresoEn: string | null
+  puntuacion: number | null
+  resultado: string | null
+}
+export interface SalaDetalle extends Omit<SalaResumen, 'participantes' | 'terminados'> {
+  participantes: ParticipanteSala[]
+}
+export interface CrearSalaInput {
+  idModulo: number
+  empleadoIds: number[]
+  horasVigencia?: number
+}
+export interface SalaPublica {
+  codigo: string
+  modulo: string
+  pensum: string | null
+  evaluacion: string | null
+  modo: ModoEvaluacion
+  expiraEn: string
+  participantes: { id: number; nombre: string; estado: EstadoParticipanteSala }[]
+}
+
 /** Respuesta de POST /cloudflare/r2 */
 export interface ArchivoSubido {
   key: string
@@ -851,6 +937,22 @@ export interface PreguntaInput {
   pregunta: string
   puntosPorRespuesta?: number
   idTema?: number
+}
+/** Una fila de la plantilla de carga masiva de preguntas. */
+export interface PreguntaMasivaInput {
+  pregunta: string
+  puntosPorRespuesta: number
+  respuestas: { respuesta: string; respuestaCorrecta: boolean }[]
+}
+export interface CargaMasivaPreguntasInput {
+  preguntas: PreguntaMasivaInput[]
+  /** true = borra antes las preguntas actuales. */
+  reemplazar?: boolean
+}
+export interface CargaMasivaPreguntasResult {
+  preguntas: number
+  respuestas: number
+  eliminadas: number
 }
 export interface RespuestaInput {
   respuesta: string

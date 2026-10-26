@@ -5,13 +5,17 @@ import PensumsTab from './PensumsTab'
 import AsignarTab from './AsignarTab'
 import AsignadosTab from './AsignadosTab'
 import CarnetTab from './CarnetTab'
+import SalasTab from './SalasTab'
+import BibliotecaTab from './BibliotecaTab'
 
 const TID = 'rh-capacitaciones'
 
 const TABS = [
   { value: 'pensums', label: 'Pensums', icon: 'solar:book-bookmark-bold' },
+  { value: 'material', label: 'Material', icon: 'solar:folder-with-files-bold' },
   { value: 'asignar', label: 'Asignar', icon: 'solar:user-plus-bold' },
   { value: 'asignados', label: 'Asignados', icon: 'solar:users-group-rounded-bold' },
+  { value: 'salas', label: 'Salas de examen', icon: 'solar:users-group-two-rounded-bold' },
   { value: 'carnets', label: 'Carnés', icon: 'solar:card-2-bold' },
 ]
 
@@ -33,8 +37,10 @@ export default function CapacitacionesPage() {
           ))}
         </TabsList>
         <TabsContent value="pensums"><PensumsTab /></TabsContent>
+        <TabsContent value="material"><BibliotecaTab /></TabsContent>
         <TabsContent value="asignar"><AsignarTab /></TabsContent>
         <TabsContent value="asignados"><AsignadosTab /></TabsContent>
+        <TabsContent value="salas"><SalasTab /></TabsContent>
         <TabsContent value="carnets"><CarnetTab /></TabsContent>
       </Tabs>
     </div>

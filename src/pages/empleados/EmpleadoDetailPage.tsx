@@ -162,7 +162,7 @@ export default function EmpleadoDetailPage() {
                 Dado de baja
               </DetailChip>
             )}
-            <DetailChip icon="solar:calendar-bold">Contratado el {formatDate(data.fechaContratacion)}</DetailChip>
+            <DetailChip icon="solar:calendar-bold">Ingresó el {formatDate(data.fechaContratacion)}</DetailChip>
             {data.salarioBaseContrato != null && (
               <DetailChip icon="solar:wallet-money-bold">Salario base {formatQ(data.salarioBaseContrato)}</DetailChip>
             )}
@@ -216,7 +216,7 @@ export default function EmpleadoDetailPage() {
             <Item label="Jornada" value={data.jornada ?? '—'} />
             <Item label="Temporalidad" value={data.temporalidadContrato ?? '—'} />
             <Item label="Tipo de contrato" value={data.tipoContrato ?? '—'} />
-            <Item label="Fecha de contratación" value={formatDate(data.fechaContratacion)} />
+            <Item label="Fecha de ingreso" value={formatDate(data.fechaContratacion)} />
             {data.fechaReingreso && <Item label="Fecha de reingreso" value={formatDate(data.fechaReingreso)} />}
             <Item
               label="Salario base"
@@ -232,7 +232,7 @@ export default function EmpleadoDetailPage() {
           <dl className="divide-y divide-slate-100">
             <Item label="Forma de pago" value={data.formaPago ?? '—'} />
             <Item
-              label="Frecuencia de pago"
+              label="Tipo de nómina"
               value={
                 data.frecuenciaPago === 'MENSUAL' ? 'Mensual' : data.frecuenciaPago === 'QUINCENAL' ? 'Quincenal' : '—'
               }

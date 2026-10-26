@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { Icon } from '@iconify/react'
 import { capacitacionesApi } from '@/api/capacitaciones'
@@ -80,6 +80,9 @@ function Encabezado({ titulo, icono, derecha }: { titulo: string; icono: string;
 
 export default function ExamenPublicoPage() {
   const { token } = useParams<{ token: string }>()
+  // Si llegó desde una sala de examen, al terminar puede volver a ella.
+  const [searchParams] = useSearchParams()
+  const sala = searchParams.get('sala')
   const [phase, setPhase] = useState<Phase>('confirm')
   const [selected, setSelected] = useState<Record<number, number>>({})
   const [timeLeft, setTimeLeft] = useState(DURACION_SEG)
@@ -361,6 +364,14 @@ export default function ExamenPublicoPage() {
               <p className="max-w-sm text-base text-slate-600">
                 Tu evaluación fue registrada. Ya podés cerrar esta página.
               </p>
+              {sala && (
+                <Button variant="outline" asChild>
+                  <Link to={`/sala/${encodeURIComponent(sala)}`}>
+                    <Icon icon="solar:arrow-left-linear" width={16} />
+                    Volver a la sala
+                  </Link>
+                </Button>
+              )}
             </div>
           </>
         )}

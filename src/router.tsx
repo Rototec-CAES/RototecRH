@@ -16,10 +16,12 @@ import HorasExtraPage from '@/pages/horas-extra/HorasExtraPage'
 import CargaTurnosPage from '@/pages/carga-turnos/CargaTurnosPage'
 import CapacitacionesPage from '@/pages/capacitaciones/CapacitacionesPage'
 import ExamenPublicoPage from '@/pages/capacitaciones/ExamenPublicoPage'
+import SalaPublicaPage from '@/pages/capacitaciones/SalaPublicaPage'
 
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
   { path: '/examen/:token', element: <ExamenPublicoPage /> },
+  { path: '/sala/:codigo', element: <SalaPublicaPage /> },
   {
     element: <RequireAuth />,
     children: [

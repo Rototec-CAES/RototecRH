@@ -205,3 +205,12 @@ _Última actualización: 2026-10-15, noche. Backend: 297 pruebas OK, `tsc` limpi
 
 - **Análisis del Excel de nómina y del de horas extra, y survey de la BD:** en el scratchpad de la sesión (`excel_nomina/`, `horas_extra/` y `db_survey.md`). Son temporales; lo importante quedó resumido aquí.
 - **Excel originales:** `C:\Fuentes\RototecRH\recursos\`.
+
+## 9. Respuestas de RRHH (2026-10-26)
+
+- **ISR – rentas exentas 2026:** Q49,764.00 (Q48,000 ene–may + Q51,024 jun–dic). Se ingresa a mano en Planilla › Parámetros (`ISR_DEDUCCION_PERSONAL`) y se ajusta cada año conforme al salario mínimo. Script `004-isr-rentas-exentas-2026.sql` (pendiente de correr).
+- **ISR – base:** la totalidad de ingresos. Salario + bonificación incentivo se proyectan × 12 (menos IGSS del salario y rentas exentas) y se prorratean por días pagados del mes. HE, bonos (P–S), comisiones y otros ingresos **no se proyectan**: se suman una vez a la renta anual y se retiene en el período el impuesto adicional que generan (`isrVariable`).
+- **Bonificación incentivo:** Q250/mes sobre base de 30 días: quincena completa = Q125 (15 días comerciales, sin importar si tiene 13–16 de calendario), mes completo = Q250. Se restan los días no pagados y fuera de contrato (`diasBonificacion`). El salario sigue por días de calendario (7.1).
+- **Totales:** confirmado que V incluye vacaciones (G) y AC incluye IGSS e ISR (ya estaba así).
+- **Textos:** "Frecuencia de pago" → "Tipo de nómina"; "Fecha de contratación" → "Fecha de ingreso" (pantallas y plantilla de actualización masiva). La columna de BD sigue siendo `frecuencia_pago` / `fecha_contratacion`.
+- **Fechas DD-MM-AAAA:** `formatDate`, `fechaCorta` de reportes y la plantilla de actualización masiva (que ahora acepta DD-MM-AAAA, DD/MM/AAAA y AAAA-MM-DD). Los `<input type="date">` siguen mostrando el formato del navegador.

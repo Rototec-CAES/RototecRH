@@ -13,14 +13,14 @@ export function toISO(date: Date | string | null | undefined): string {
 }
 
 /**
- * 'YYYY-MM-DD…' → 'dd/mm/aaaa'. Parte el string en vez de construir un Date
+ * 'YYYY-MM-DD…' → 'dd-mm-aaaa'. Parte el string en vez de construir un Date
  * para no correr la fecha un día en Guatemala (UTC-6).
  */
 export function fechaCorta(valor: unknown): string {
   if (!valor) return ''
   const iso = String(valor).slice(0, 10)
   const [y, m, d] = iso.split('-')
-  return y && m && d ? `${d}/${m}/${y}` : ''
+  return y && m && d ? `${d}-${m}-${y}` : ''
 }
 
 export function num(v: unknown): number {

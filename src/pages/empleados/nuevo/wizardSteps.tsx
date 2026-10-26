@@ -204,13 +204,13 @@ export function StepContent({ index }: { index: number }) {
           <SelectField name="jornada" label="Jornada" required options={jornadas} />
           <SelectField name="temporalidad_contrato" label="Temporalidad del contrato" required options={temporalidades} />
           <SelectField name="tipo_contrato" label="Tipo de contrato" required options={tiposContrato} />
-          <TextField name="fecha_contratacion" label="Fecha de contratación" required type="date" />
+          <TextField name="fecha_contratacion" label="Fecha de ingreso" required type="date" />
           <TextField name="fecha_reingreso" label="Fecha de reingreso" type="date" />
           <TextField name="salario_base_contrato" label="Salario base (Q)" required type="number" />
           <TextField name="profesion" label="Profesión" />
           <TextField name="titulo" label="Título / diploma" />
           <SelectField name="forma_pago" label="Forma de pago" required options={formasPago} />
-          <SelectField name="frecuencia_pago" label="Frecuencia de pago" required options={frecuenciasPago} />
+          <SelectField name="frecuencia_pago" label="Tipo de nómina" required options={frecuenciasPago} />
           <SelectField
             name="codigo_banco"
             label="Banco"

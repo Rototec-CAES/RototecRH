@@ -13,21 +13,18 @@ export function formatQ(value: number): string {
   }).format(value)
 }
 
+/** Fecha en formato DD-MM-AAAA (el que pidió RRHH para todo el sistema). */
 export function formatDate(iso: string | undefined | null): string {
   if (!iso) return '—'
   // Las fechas vienen como 'YYYY-MM-DD' o ISO con hora. Tomamos solo la parte de
-  // fecha y armamos un Date LOCAL; si usáramos new Date('YYYY-MM-DD') JS lo lee
-  // como medianoche UTC y en GT (UTC-6) se corre un día hacia atrás.
+  // fecha del texto; si usáramos new Date('YYYY-MM-DD') JS lo lee como medianoche
+  // UTC y en GT (UTC-6) se corre un día hacia atrás.
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso)
-  const d = m
-    ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
-    : new Date(iso)
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`
+  const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return '—'
-  return d.toLocaleDateString('es-GT', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  })
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()}`
 }
 
 // =====================================================

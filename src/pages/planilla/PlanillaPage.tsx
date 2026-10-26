@@ -77,7 +77,7 @@ export default function PlanillaPage() {
               </SelectItem>
             ))}
           </Selector>
-          <Selector label="Tipo" value={tipo} onChange={(v) => setTipo(v as TipoPlanilla)} width="w-32">
+          <Selector label="Tipo de nómina" value={tipo} onChange={(v) => setTipo(v as TipoPlanilla)} width="w-32">
             <SelectItem value="QUINCENAL">Quincenal</SelectItem>
             <SelectItem value="MENSUAL">Mensual</SelectItem>
           </Selector>
@@ -90,8 +90,8 @@ export default function PlanillaPage() {
           <p className="flex items-center gap-1.5 pb-2.5 text-xs text-slate-500">
             <Icon icon="solar:info-circle-linear" width={14} className="shrink-0 text-sky-500" />
             {tipo === 'MENSUAL'
-              ? 'Incluye a los colaboradores con frecuencia de pago mensual.'
-              : 'Incluye a los colaboradores con frecuencia de pago quincenal.'}
+              ? 'Incluye a los colaboradores con tipo de nómina mensual.'
+              : 'Incluye a los colaboradores con tipo de nómina quincenal.'}
           </p>
         </FilterRow>
       </FilterCard>

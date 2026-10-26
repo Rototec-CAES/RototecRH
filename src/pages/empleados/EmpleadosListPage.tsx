@@ -134,7 +134,7 @@ export default function EmpleadosListPage() {
             { header: 'Empresa', key: 'empresa', width: 28 },
             { header: 'Puesto', key: 'puesto', width: 28 },
             { header: 'Salario base', key: 'salario', width: 16 },
-            { header: 'Fecha contratación', key: 'contratacion', width: 18 },
+            { header: 'Fecha de ingreso', key: 'contratacion', width: 18 },
             { header: 'Estado', key: 'estado', width: 10 },
           ],
           filas,
@@ -245,7 +245,7 @@ export default function EmpleadosListPage() {
           <DataTableHeadCell>Empresa</DataTableHeadCell>
           <DataTableHeadCell>Puesto</DataTableHeadCell>
           <DataTableHeadCell className="text-right">Salario base</DataTableHeadCell>
-          <DataTableHeadCell>Contratación</DataTableHeadCell>
+          <DataTableHeadCell>Ingreso</DataTableHeadCell>
           <DataTableHeadCell>Estado</DataTableHeadCell>
           <DataTableHeadCell className="w-20 text-right">
             <span className="sr-only">Acciones</span>

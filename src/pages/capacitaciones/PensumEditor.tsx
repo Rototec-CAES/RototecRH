@@ -6,6 +6,12 @@ import { toast } from '@/components/ui/sonner'
 
 import { Button } from '@/components/ui/button'
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -31,8 +37,10 @@ import {
   useCreateModulo,
   useCreateTema,
   useDeleteModulo,
+  useDesvincularDocumento,
   useDeleteTema,
   usePensumArbol,
+  useReordenarModulos,
   useUpdateModulo,
 } from '@/hooks/useCapacitaciones'
 import {
@@ -41,8 +49,24 @@ import {
   type ModuloFormValues,
   type TemaFormValues,
 } from '@/lib/validators'
-import type { ModuloInput, PensumModuloArbol, TemaInput } from '@/types'
+import type { DocumentoCap, ModuloInput, PensumModuloArbol, TemaInput } from '@/types'
 import { ModuloEvaluacionDialog } from './ModuloEvaluacionDialog'
+import { AgregarMaterialDialog, DocumentoVisorDialog, formatTamano, iconoDocumento } from './MaterialDocumentos'
+
+type Movimiento = 'arriba' | 'abajo' | 'primero' | 'ultimo'
+
+/** Lista de IDs con el módulo de la posición `idx` movido según la acción. */
+function moverId(ids: number[], idx: number, accion: Movimiento): number[] {
+  const out = [...ids]
+  const [id] = out.splice(idx, 1)
+  const destino =
+    accion === 'arriba' ? Math.max(0, idx - 1)
+      : accion === 'abajo' ? Math.min(out.length, idx + 1)
+        : accion === 'primero' ? 0
+          : out.length
+  out.splice(destino, 0, id)
+  return out
+}
 
 interface Props {
   idPensum: number | undefined
@@ -55,6 +79,19 @@ export function PensumEditor({ idPensum, open, onOpenChange }: Props) {
   const [moduloDialog, setModuloDialog] = useState<{ mode: 'create' | 'edit'; modulo?: PensumModuloArbol } | null>(null)
   const [temaModuloId, setTemaModuloId] = useState<number | null>(null)
   const [evalModuloId, setEvalModuloId] = useState<number | null>(null)
+  const [materialModuloId, setMaterialModuloId] = useState<number | null>(null)
+  const [viendoDoc, setViendoDoc] = useState<DocumentoCap | null>(null)
+  const reordenar = useReordenarModulos(idPensum ?? 0)
+
+  function onMover(idx: number, accion: Movimiento) {
+    if (!data) return
+    const ids = data.modulos.map((m) => m.id)
+    const nuevos = moverId(ids, idx, accion)
+    if (nuevos.every((id, i) => id === ids[i])) return
+    reordenar.mutate(nuevos, {
+      onError: (err) => toast.error(err instanceof Error ? err.message : 'No se pudo guardar el orden'),
+    })
+  }
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -101,14 +138,19 @@ export function PensumEditor({ idPensum, open, onOpenChange }: Props) {
               description="Crea el primero con el botón Agregar módulo."
             />
           ) : (
-            data.modulos.map((m) => (
+            data.modulos.map((m, i) => (
               <ModuloCard
                 key={m.id}
                 idPensum={idPensum as number}
                 modulo={m}
+                posicion={i + 1}
+                total={data.modulos.length}
+                onMover={(accion) => onMover(i, accion)}
                 onEdit={() => setModuloDialog({ mode: 'edit', modulo: m })}
                 onAddTema={() => setTemaModuloId(m.id)}
                 onEvaluacion={() => setEvalModuloId(m.id)}
+                onAgregarMaterial={() => setMaterialModuloId(m.id)}
+                onVerDocumento={setViendoDoc}
               />
             ))
           )}
@@ -136,6 +178,16 @@ export function PensumEditor({ idPensum, open, onOpenChange }: Props) {
           open={evalModuloId !== null}
           onOpenChange={(o) => !o && setEvalModuloId(null)}
         />
+        {idPensum !== undefined && (
+          <AgregarMaterialDialog
+            idPensum={idPensum}
+            idModulo={materialModuloId}
+            yaLigados={(data?.modulos.find((m) => m.id === materialModuloId)?.documentos ?? []).map((d) => d.id)}
+            open={materialModuloId !== null}
+            onOpenChange={(o) => !o && setMaterialModuloId(null)}
+          />
+        )}
+        <DocumentoVisorDialog doc={viendoDoc} onOpenChange={(o) => !o && setViendoDoc(null)} />
       </SheetContent>
     </Sheet>
   )
@@ -144,18 +196,39 @@ export function PensumEditor({ idPensum, open, onOpenChange }: Props) {
 function ModuloCard({
   idPensum,
   modulo,
+  posicion,
+  total,
+  onMover,
   onEdit,
   onAddTema,
   onEvaluacion,
+  onAgregarMaterial,
+  onVerDocumento,
 }: {
   idPensum: number
   modulo: PensumModuloArbol
+  posicion: number
+  total: number
+  onMover: (accion: Movimiento) => void
   onEdit: () => void
   onAddTema: () => void
   onEvaluacion: () => void
+  onAgregarMaterial: () => void
+  onVerDocumento: (doc: DocumentoCap) => void
 }) {
   const deleteMod = useDeleteModulo(idPensum)
   const deleteTema = useDeleteTema(idPensum)
+  const desvincular = useDesvincularDocumento(idPensum)
+  const documentos = modulo.documentos ?? []
+
+  async function onQuitarDocumento(doc: DocumentoCap) {
+    try {
+      await desvincular.mutateAsync({ idModulo: modulo.id, idDocumento: doc.id })
+      toast.success('Material quitado del módulo (sigue en la biblioteca)')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al quitar')
+    }
+  }
 
   async function onDeleteModulo() {
     const ok = await confirmar({
@@ -184,8 +257,11 @@ function ModuloCard({
     <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-start gap-3">
-          <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-sky-50 text-sky-600 ring-1 ring-sky-100">
-            <Icon icon="solar:layers-minimalistic-bold" width={15} />
+          <span
+            className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-sky-50 text-sm font-semibold text-sky-700 ring-1 ring-sky-100"
+            title={`Módulo ${posicion} de ${total}`}
+          >
+            {posicion}
           </span>
           <div className="min-w-0">
             <h3 className="text-sm font-semibold text-slate-900">{modulo.modulo}</h3>
@@ -205,6 +281,47 @@ function ModuloCard({
           </div>
         </div>
         <div className="flex shrink-0 gap-1">
+          {total > 1 && (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onMover('arriba')}
+                disabled={posicion === 1}
+                title="Subir módulo"
+                aria-label="Subir módulo"
+              >
+                <Icon icon="solar:alt-arrow-up-bold" width={15} />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onMover('abajo')}
+                disabled={posicion === total}
+                title="Bajar módulo"
+                aria-label="Bajar módulo"
+              >
+                <Icon icon="solar:alt-arrow-down-bold" width={15} />
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" title="Más opciones de orden" aria-label="Más opciones de orden">
+                    <Icon icon="solar:menu-dots-bold" width={15} />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem className="gap-2" disabled={posicion === 1} onSelect={() => onMover('primero')}>
+                    <Icon icon="solar:double-alt-arrow-up-linear" width={15} />
+                    Colocar primero
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className="gap-2" disabled={posicion === total} onSelect={() => onMover('ultimo')}>
+                    <Icon icon="solar:double-alt-arrow-down-linear" width={15} />
+                    Colocar último
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
+          )}
           <Button variant="ghost" size="sm" onClick={onEdit} title="Editar módulo" aria-label="Editar módulo">
             <Icon icon="solar:pen-bold" width={15} />
           </Button>
@@ -258,6 +375,52 @@ function ModuloCard({
                   </Button>
                 </li>
               ))}
+            </ul>
+          )}
+        </div>
+        <div>
+          <div className="mb-1.5 flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Material</span>
+            <Button variant="ghost" size="sm" onClick={onAgregarMaterial} className="text-sky-600 hover:text-sky-700">
+              <Icon icon="solar:add-circle-linear" width={15} />
+              Material
+            </Button>
+          </div>
+          {documentos.length === 0 ? (
+            <p className="text-xs text-slate-400">Sin material. Agrega PDF, presentaciones u otros archivos de la biblioteca.</p>
+          ) : (
+            <ul className="space-y-1">
+              {documentos.map((d) => {
+                const ic = iconoDocumento(d)
+                return (
+                  <li
+                    key={d.id}
+                    className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-1.5 text-sm"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => onVerDocumento(d)}
+                      className="flex min-w-0 items-center gap-2 text-left text-slate-700 hover:text-sky-700"
+                      title="Ver material"
+                    >
+                      <Icon icon={ic.icon} width={16} className={`shrink-0 ${ic.color}`} />
+                      <span className="truncate">{d.nombre}</span>
+                      {d.tamano != null && <span className="shrink-0 text-xs text-slate-400">{formatTamano(d.tamano)}</span>}
+                    </button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onQuitarDocumento(d)}
+                      disabled={desvincular.isPending}
+                      title="Quitar del módulo"
+                      aria-label="Quitar del módulo"
+                      className="h-7 hover:bg-rose-50 hover:text-rose-600"
+                    >
+                      <Icon icon="solar:close-circle-linear" width={14} />
+                    </Button>
+                  </li>
+                )
+              })}
             </ul>
           )}
         </div>
