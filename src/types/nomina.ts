@@ -8,12 +8,6 @@ export type TipoPlanilla = 'QUINCENAL' | 'MENSUAL'
 
 export const tipoDePlanilla = (q: QuincenaNum): TipoPlanilla => (q === 0 ? 'MENSUAL' : 'QUINCENAL')
 
-/** Banco de tBancos que corresponde al código del empleado (directo o por equivalencia). */
-export interface BancoResuelto {
-  id: number
-  codigo: string
-  nombre: string
-}
 
 export interface SemanaISO {
   clave: string // "2026-W38"
@@ -37,8 +31,8 @@ export interface LineaNomina {
   salarioBase: number
   bonificacionBase: number
   formaPago: string | null
+  /** Código único que el banco le asigna al colaborador (enrollment); no identifica a un banco. */
   codigoBanco: string | null
-  banco?: BancoResuelto | null
   numeroCuenta: string | null
   tipoCuenta: string | null
   numeroIGSS: string | null
@@ -204,26 +198,4 @@ export interface DescuentoEmpleadoParche {
   cuota?: number
   saldo?: number | null
   activo?: boolean
-}
-
-export interface BancoCatalogo {
-  id: number
-  nombre: string
-  codigo: string
-  pais: string | null
-}
-
-/** Un código de banco que tienen los empleados en tEmpleados.codigo_banco. */
-export interface CodigoBancoEmpleados {
-  codigo: string
-  empleados: number
-  activos: number
-  /** El código ya es un CodigoBanco de tBancos (no necesita equivalencia). */
-  directo: boolean
-  idBanco: number | null
-}
-
-export interface BancosNomina {
-  bancos: BancoCatalogo[]
-  codigos: CodigoBancoEmpleados[]
 }

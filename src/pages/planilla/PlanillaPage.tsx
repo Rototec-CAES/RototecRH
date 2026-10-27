@@ -13,7 +13,6 @@ import { PageHeader } from '@/components/shared/PageHeader'
 import { FieldLabel, FilterCard, FilterRow } from '@/shared/report/report-ui'
 import { useEmpresas } from '@/hooks/useCompanyCatalogos'
 import type { PeriodoPlanilla, QuincenaNum, TipoPlanilla } from '@/types/nomina'
-import { BancosTab } from './BancosTab'
 import { DescuentosTab } from './DescuentosTab'
 import { ParametrosTab } from './ParametrosTab'
 import { PlanillaTab } from './PlanillaTab'
@@ -106,10 +105,6 @@ export default function PlanillaPage() {
             <Icon icon="solar:hand-money-bold" width={16} />
             Préstamos y embargos
           </TabsTrigger>
-          <TabsTrigger value="bancos" data-testid="rh-planilla__tab-bancos">
-            <Icon icon="solar:card-bold" width={16} />
-            Bancos
-          </TabsTrigger>
           <TabsTrigger value="parametros" data-testid="rh-planilla__tab-parametros">
             <Icon icon="solar:tuning-2-bold" width={16} />
             Parámetros
@@ -120,9 +115,6 @@ export default function PlanillaPage() {
         </TabsContent>
         <TabsContent value="descuentos">
           <DescuentosTab empresaId={empresaId} />
-        </TabsContent>
-        <TabsContent value="bancos">
-          <BancosTab />
         </TabsContent>
         <TabsContent value="parametros">
           <ParametrosTab />

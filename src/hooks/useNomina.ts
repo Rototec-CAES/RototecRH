@@ -15,7 +15,6 @@ const QK = {
   semanas: (id: number, idEmpleado: number) => ['nomina', 'semanas-he', id, idEmpleado] as const,
   parametros: ['nomina', 'parametros'] as const,
   descuentos: ['nomina', 'descuentos'] as const,
-  bancos: ['nomina', 'bancos'] as const,
 }
 
 export function usePlanillaPeriodo(p: PeriodoPlanilla | null) {
@@ -122,21 +121,5 @@ export function useActualizarDescuentoEmpleado() {
   return useMutation({
     mutationFn: (v: { id: number; parche: DescuentoEmpleadoParche }) => nominaApi.actualizarDescuento(v.id, v.parche),
     onSuccess: () => qc.invalidateQueries({ queryKey: QK.descuentos }),
-  })
-}
-
-export function useBancosNomina() {
-  return useQuery({ queryKey: QK.bancos, queryFn: nominaApi.bancos })
-}
-
-export function useGuardarEquivalenciaBanco() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (v: { codigo: string; idBanco: number | null }) => nominaApi.guardarEquivalenciaBanco(v.codigo, v.idBanco),
-    onSuccess: (data) => {
-      qc.setQueryData(QK.bancos, data)
-      // Las planillas abiertas muestran el banco resuelto.
-      qc.invalidateQueries({ queryKey: ['nomina', 'planilla'] })
-    },
   })
 }

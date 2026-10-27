@@ -360,7 +360,7 @@ export const empleadoCreateSchema = z
     titulo: optStr(60),
     forma_pago: reqStr('Selecciona la forma de pago'),
     frecuencia_pago: z.enum(['QUINCENAL', 'MENSUAL'], { message: 'Selecciona el tipo de nómina' }),
-    codigo_banco: z.string().optional().or(z.literal('')),
+    codigo_banco: z.string().trim().max(10, 'Máximo 10 caracteres').optional().or(z.literal('')),
     numero_cuenta: z.string().optional().or(z.literal('')),
     tipo_cuenta: z.string().optional().or(z.literal('')),
     // biométrico

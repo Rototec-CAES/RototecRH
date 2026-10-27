@@ -34,7 +34,6 @@ const TIPO_TEXTO: Record<CampoActualizacionMasiva['tipo'], string> = {
   fecha: 'Fecha DD-MM-AAAA',
   booleano: 'Sí / No',
   catalogo: 'Lista',
-  banco: 'Código de banco (lista)',
   referencia: 'Lista "ID - Nombre" (o el ID)',
 }
 
@@ -123,9 +122,8 @@ export async function descargarPlantillaActualizacionMasiva(p: PlantillaActualiz
           allowBlank: true,
           formulae: [rango],
           showErrorMessage: true,
-          // Bancos: advertencia (hay códigos antiguos ya cargados que no están en la lista).
           // Puesto/departamento: advertencia para poder escribir solo el ID.
-          errorStyle: c.tipo === 'banco' || c.tipo === 'referencia' ? 'warning' : 'stop',
+          errorStyle: c.tipo === 'referencia' ? 'warning' : 'stop',
           errorTitle: c.etiqueta,
           error: 'Valor no permitido. Vea la hoja Instrucciones.',
         }
@@ -167,12 +165,12 @@ export async function descargarPlantillaActualizacionMasiva(p: PlantillaActualiz
   titulo.font = { bold: true, size: 14 }
   const reglas = [
     '1. Edite las columnas de encabezado AZUL de la hoja "Empleados". La columna GRIS (ID) es la llave del empleado.',
-    '2. NO modifique ni borre la columna ID: es la llave que identifica a cada empleado.',
+    '2. NO modifique ni borre el ID de un empleado existente: es la llave que lo identifica.',
     '3. Celda VACÍA = el dato NO cambia. Con este archivo no se puede borrar un dato existente.',
     '4. Fechas en formato DD-MM-AAAA (ej. 15-01-2024). Números sin "Q" ni separador de miles.',
     '5. Sí/No para las columnas de habilitar y Activo. Las listas desplegables muestran los valores permitidos. Puesto y Departamento: elija "ID - Nombre" de la lista (hay nombres repetidos entre empresas).',
-    '6. Para dar de baja: Activo = No, con Tipo de baja y Fecha de baja (último día laborado). Motivo de baja es opcional.',
-    '7. Puede borrar las filas de empleados que no quiera actualizar. No agregue empleados nuevos.',
+    '6. Para dar de baja: Activo = No, con Tipo de baja. Fecha de baja (último día laborado) y Motivo de baja son opcionales.',
+    '7. Puede borrar las filas de empleados que no quiera actualizar. EMPLEADOS NUEVOS: agregue una fila con el ID VACÍO; obligatorios Nombre, Apellido, DPI, Puesto, Departamento y Fecha de ingreso (la empresa sale del departamento). No se registran en el biométrico: hágalo aparte para que puedan marcar.',
     '8. Al cargar el archivo verá exactamente qué cambiará (valor anterior → nuevo) antes de aplicar.',
     '9. Si alguna fila tiene errores NO se aplica ningún cambio: corrija el archivo y vuelva a cargarlo.',
   ]
@@ -195,9 +193,7 @@ export async function descargarPlantillaActualizacionMasiva(p: PlantillaActualiz
     row.getCell(1).fill = relleno(GRIS_ENCABEZADO)
   }
   for (const c of p.campos) {
-    const valores = c.tipo === 'banco'
-      ? 'Ver la tabla de bancos abajo'
-      : c.tipo === 'referencia'
+    const valores = c.tipo === 'referencia'
         ? `Lista desplegable (${c.valores.length} opciones)`
         : c.valores.length
         ? c.valores.map((v) => (v.descripcion && v.descripcion !== v.valor ? `${v.valor} = ${v.descripcion}` : v.valor)).join('\n')
@@ -208,15 +204,6 @@ export async function descargarPlantillaActualizacionMasiva(p: PlantillaActualiz
     row.alignment = { wrapText: true, vertical: 'top' }
   }
 
-  instr.addRow([])
-  const encBancos = instr.addRow(['Código de banco', 'País', 'Banco'])
-  encBancos.eachCell((cell) => {
-    cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }
-    cell.fill = relleno(AZUL_ENCABEZADO)
-  })
-  for (const b of p.bancos) instr.addRow([b.codigo, b.pais ?? '', b.nombre])
-  instr.addRow([])
-  instr.addRow(['Los códigos antiguos que ya tiene un empleado (ej. 105) se respetan si no se cambian; un código nuevo debe estar en esta tabla.'])
 
   const buf = await wb.xlsx.writeBuffer()
   const hoy = new Date().toISOString().slice(0, 10)
@@ -276,10 +263,16 @@ export async function leerArchivoActualizacionMasiva(
     porEncabezado.set(normalizar(c.etiqueta), c.campo)
     porEncabezado.set(normalizar(c.campo), c.campo)
   }
+  // Por ahora la fecha de contratación ES la fecha de ingreso: se acepta con cualquiera de los dos nombres.
+  for (const alias of ['Fecha de contratación', 'Fecha contratación', 'Fecha de ingreso', 'Fecha ingreso']) {
+    if (campos.some((c) => c.campo === 'fecha_contratacion')) porEncabezado.set(normalizar(alias), 'fecha_contratacion')
+  }
+  // Si dos columnas apuntan al mismo dato (p. ej. "Fecha de ingreso" y "Fecha de contratación"),
+  // se usa la primera que traiga valor en cada fila.
   const columnas = new Map<number, string>()
   ws.getRow(1).eachCell((cell, col) => {
     const campo = porEncabezado.get(normalizar(String(valorCelda(cell.value) ?? '')))
-    if (campo && ![...columnas.values()].includes(campo)) columnas.set(col, campo)
+    if (campo && (campo !== 'id' || ![...columnas.values()].includes('id'))) columnas.set(col, campo)
   })
   if (![...columnas.values()].includes('id')) {
     throw new Error('No se encontró la columna "ID" en la hoja de empleados. Use la plantilla descargada.')
@@ -295,7 +288,7 @@ export async function leerArchivoActualizacionMasiva(
     let conDatos = false
     for (const [col, campo] of columnas) {
       const v = valorCelda(row.getCell(col).value)
-      if (v === undefined) continue
+      if (v === undefined || fila[campo] !== undefined) continue
       fila[campo] = v
       conDatos = true
     }

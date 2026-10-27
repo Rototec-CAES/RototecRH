@@ -20,7 +20,6 @@ import {
   usePuestos,
 } from '@/hooks/useCompanyCatalogos'
 import { useBiotimeDepartamentos, useBiotimeUbicaciones } from '@/hooks/useBiotime'
-import { useBancosNomina } from '@/hooks/useNomina'
 import type { EmpleadoCreateValues } from '@/lib/validators'
 import { CheckboxField, SelectField, TextField, type Opt } from './fields'
 
@@ -85,14 +84,6 @@ export function StepContent({ index }: { index: number }) {
   const departamentoId = numOrUndef(watch('id_departamento'))
   const subDepId = numOrUndef(watch('id_sub_departamento'))
   const esTransferencia = watch('forma_pago') === 'TRANSFERENCIA'
-  // Bancos del catálogo tBancos. Un código viejo del empleado (105, 107…) se conserva como opción
-  // para no perderlo al editar; su banco real se define en Planilla › Bancos.
-  const { data: catBancos, isLoading: cargandoBancos } = useBancosNomina()
-  const codigoBancoActual = watch('codigo_banco')
-  const bancos: Opt[] = (catBancos?.bancos ?? []).map((b) => ({ value: b.codigo, label: `${b.codigo} · ${b.nombre}` }))
-  if (codigoBancoActual && !bancos.some((b) => b.value === codigoBancoActual)) {
-    bancos.unshift({ value: codigoBancoActual, label: `${codigoBancoActual} · código anterior` })
-  }
 
   const paises = usePaises()
   const paisId = paises.data?.find((p) => p.codigo === paisKey)?.id
@@ -211,13 +202,13 @@ export function StepContent({ index }: { index: number }) {
           <TextField name="titulo" label="Título / diploma" />
           <SelectField name="forma_pago" label="Forma de pago" required options={formasPago} />
           <SelectField name="frecuencia_pago" label="Tipo de nómina" required options={frecuenciasPago} />
-          <SelectField
+          {/* Código único que el banco le da al colaborador para el enrollment; no es un catálogo de bancos. */}
+          <TextField
             name="codigo_banco"
-            label="Banco"
+            label="Código de banco"
+            placeholder="Código del colaborador en el banco"
             required={esTransferencia}
             disabled={!esTransferencia}
-            loading={cargandoBancos}
-            options={bancos}
           />
           <TextField name="numero_cuenta" label="No. de cuenta" required={esTransferencia} disabled={!esTransferencia} />
           <SelectField

@@ -97,7 +97,8 @@ export default function ActualizacionMasivaPage() {
   const fileRef = useRef<HTMLInputElement>(null)
 
   const resumen = validacion?.resumen
-  const puedeAplicar = Boolean(resumen && resumen.conCambios > 0 && resumen.conErrores === 0)
+  const porAplicar = (resumen?.conCambios ?? 0) + (resumen?.nuevos ?? 0)
+  const puedeAplicar = Boolean(resumen && porAplicar > 0 && resumen.conErrores === 0)
 
   // Solo se listan filas con cambios o con errores; las sin cambios solo se cuentan.
   const filasVisibles = useMemo(() => {
@@ -163,7 +164,12 @@ export default function ActualizacionMasivaPage() {
       setResultado(r)
       setConfirmar(false)
       setPaso(2)
-      toast.success(`${r.actualizados} empleado${r.actualizados === 1 ? '' : 's'} actualizado${r.actualizados === 1 ? '' : 's'}`)
+      toast.success(
+        [
+          r.actualizados ? `${r.actualizados} empleado${r.actualizados === 1 ? '' : 's'} actualizado${r.actualizados === 1 ? '' : 's'}` : '',
+          r.creados ? `${r.creados} empleado${r.creados === 1 ? '' : 's'} nuevo${r.creados === 1 ? '' : 's'}` : '',
+        ].filter(Boolean).join(' y '),
+      )
     } catch (err) {
       setConfirmar(false)
       toast.error(extractApiErrorMessage(err))
@@ -303,8 +309,9 @@ export default function ActualizacionMasivaPage() {
 
               {resumen && (
                 <>
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
                     <Resumen etiqueta="Filas leídas" valor={resumen.total} />
+                    <Resumen etiqueta="Nuevos" valor={resumen.nuevos} tono="ok" />
                     <Resumen etiqueta="Con cambios" valor={resumen.conCambios} tono="ok" />
                     <Resumen etiqueta="Sin cambios (se omiten)" valor={resumen.sinCambios} tono="muted" />
                     <Resumen etiqueta="Con errores" valor={resumen.conErrores} tono="error" />
@@ -321,7 +328,7 @@ export default function ActualizacionMasivaPage() {
                         en el Excel y vuelva a cargarlo.
                       </AlertDescription>
                     </Alert>
-                  ) : resumen.conCambios === 0 ? (
+                  ) : porAplicar === 0 ? (
                     <Alert variant="warning">
                       <Icon icon="solar:danger-triangle-bold" width={18} />
                       <AlertTitle>No hay cambios</AlertTitle>
@@ -334,8 +341,19 @@ export default function ActualizacionMasivaPage() {
                       <Icon icon="solar:check-circle-bold" width={18} />
                       <AlertTitle>Listo para actualizar</AlertTitle>
                       <AlertDescription>
-                        Se cambiarán <b>{resumen.totalCambios}</b> datos en <b>{resumen.conCambios}</b> empleado
-                        {resumen.conCambios === 1 ? '' : 's'}. Revise la tabla y presione «Actualizar».
+                        {resumen.conCambios > 0 && (
+                          <>
+                            Se cambiarán <b>{resumen.totalCambios}</b> datos en <b>{resumen.conCambios}</b> empleado
+                            {resumen.conCambios === 1 ? '' : 's'}.{' '}
+                          </>
+                        )}
+                        {resumen.nuevos > 0 && (
+                          <>
+                            Se crearán <b>{resumen.nuevos}</b> empleado{resumen.nuevos === 1 ? '' : 's'} nuevo
+                            {resumen.nuevos === 1 ? '' : 's'} (sin registro en el biométrico).{' '}
+                          </>
+                        )}
+                        Revise la tabla y presione «Actualizar».
                       </AlertDescription>
                     </Alert>
                   )}
@@ -347,7 +365,7 @@ export default function ActualizacionMasivaPage() {
                         onChange={setFiltro}
                         options={[
                           { value: 'TODOS', label: 'Todos' },
-                          { value: 'CAMBIOS', label: `Con cambios (${resumen.conCambios})` },
+                          { value: 'CAMBIOS', label: `Nuevos y con cambios (${porAplicar})` },
                           { value: 'ERRORES', label: `Con errores (${resumen.conErrores})` },
                         ]}
                         testId="rh-actualizacion-masiva__filtro"
@@ -371,7 +389,13 @@ export default function ActualizacionMasivaPage() {
                                   className={cn('align-top', conError && 'bg-rose-50/70 hover:bg-rose-50')}
                                 >
                                   <TableCell className="tabular-nums text-slate-500">{f.fila ?? '—'}</TableCell>
-                                  <TableCell className="tabular-nums">{f.id ?? '—'}</TableCell>
+                                  <TableCell className="tabular-nums">
+                                    {f.nuevo ? (
+                                      <span className="rounded-md bg-emerald-100 px-1.5 py-0.5 text-xs font-semibold text-emerald-700">Nuevo</span>
+                                    ) : (
+                                      f.id ?? '—'
+                                    )}
+                                  </TableCell>
                                   <TableCell>
                                     <div className="font-medium">{f.nombre ?? '—'}</div>
                                     {f.codigo && <div className="text-xs text-slate-500">Código {f.codigo}</div>}
@@ -392,10 +416,15 @@ export default function ActualizacionMasivaPage() {
                                         {f.cambios.map((c) => (
                                           <li key={c.campo}>
                                             <span className="text-slate-500">{c.etiqueta}:</span>{' '}
-                                            <span className="text-slate-500 line-through decoration-slate-300">
-                                              {mostrarValor(c, c.anterior)}
-                                            </span>{' '}
-                                            → <span className="font-medium text-emerald-700">{mostrarValor(c, c.nuevo)}</span>
+                                            {!f.nuevo && (
+                                              <>
+                                                <span className="text-slate-500 line-through decoration-slate-300">
+                                                  {mostrarValor(c, c.anterior)}
+                                                </span>{' '}
+                                                →{' '}
+                                              </>
+                                            )}
+                                            <span className="font-medium text-emerald-700">{mostrarValor(c, c.nuevo)}</span>
                                           </li>
                                         ))}
                                       </ul>
@@ -436,7 +465,7 @@ export default function ActualizacionMasivaPage() {
                     data-testid="rh-actualizacion-masiva__btn-actualizar"
                   >
                     <Icon icon="solar:check-circle-bold" />
-                    Actualizar{resumen && puedeAplicar ? ` ${resumen.conCambios} empleado${resumen.conCambios === 1 ? '' : 's'}` : ''}
+                    Actualizar{resumen && puedeAplicar ? ` ${porAplicar} empleado${porAplicar === 1 ? '' : 's'}` : ''}
                   </Button>
                 </div>
               </div>
@@ -452,8 +481,20 @@ export default function ActualizacionMasivaPage() {
                 <h3 className="text-lg font-semibold text-slate-900">Actualización aplicada</h3>
                 <p className="text-sm text-slate-500">
                   Se actualizaron <b>{resultado.actualizados}</b> empleado{resultado.actualizados === 1 ? '' : 's'} (
-                  {resultado.camposActualizados} dato{resultado.camposActualizados === 1 ? '' : 's'} en total).
+                  {resultado.camposActualizados} dato{resultado.camposActualizados === 1 ? '' : 's'} en total)
+                  {resultado.creados > 0 && (
+                    <>
+                      {' '}y se crearon <b>{resultado.creados}</b> empleado{resultado.creados === 1 ? '' : 's'} nuevo
+                      {resultado.creados === 1 ? '' : 's'}
+                    </>
+                  )}
+                  .
                 </p>
+                {resultado.creados > 0 && (
+                  <p className="mt-1 text-xs text-amber-700">
+                    Los empleados nuevos no quedaron registrados en el biométrico; regístrelos aparte para que puedan marcar.
+                  </p>
+                )}
               </div>
               <div className="flex flex-wrap justify-center gap-2">
                 <Button asChild>
@@ -477,8 +518,9 @@ export default function ActualizacionMasivaPage() {
               ¿Aplicar la actualización?
             </DialogTitle>
             <DialogDescription>
-              Se cambiarán {resumen?.totalCambios ?? 0} datos en {resumen?.conCambios ?? 0} empleados, todo en una
-              sola operación. Esta acción no se puede deshacer desde esta pantalla.
+              Se cambiarán {resumen?.totalCambios ?? 0} datos en {resumen?.conCambios ?? 0} empleados
+              {resumen?.nuevos ? ` y se crearán ${resumen.nuevos} empleados nuevos` : ''}, todo en una sola operación.
+              Esta acción no se puede deshacer desde esta pantalla.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

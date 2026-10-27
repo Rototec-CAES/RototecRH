@@ -481,12 +481,11 @@ export function EmpleadoFormSheet({ open, onOpenChange, mode, empleado }: Props)
                     label={`Código de banco ${esTransferencia ? '*' : ''}`}
                     error={errors.codigoBanco?.message}
                   >
-                    <ControlledSelect
-                      value={form.watch('codigoBanco') ?? ''}
-                      onValueChange={(v) => form.setValue('codigoBanco', v)}
-                      items={cat?.bancos ?? []}
+                    <Input
+                      {...form.register('codigoBanco')}
+                      maxLength={10}
                       disabled={!esTransferencia}
-                      placeholder="Seleccionar"
+                      placeholder="Código del colaborador en el banco"
                     />
                   </Field>
                   <Field
@@ -514,8 +513,7 @@ export function EmpleadoFormSheet({ open, onOpenChange, mode, empleado }: Props)
                   </Field>
                 </div>
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Los códigos de banco son los que usa contabilidad en la planilla (520, 618, etc.).
-                  La lista actual es provisional hasta recibir el archivo de Steven.
+                  El código de banco es el código único que el banco le asigna al colaborador para el enrollment.
                 </p>
               </TabsContent>
             </div>

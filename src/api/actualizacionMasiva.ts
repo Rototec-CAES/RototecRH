@@ -11,7 +11,7 @@ import { rrhhApi as api } from './client'
  * contra los datos actuales viven en el backend).
  */
 export const actualizacionMasivaApi = {
-  /** Columnas editables, catálogo de bancos y valores actuales de los empleados activos. */
+  /** Columnas editables y valores actuales de los empleados activos. */
   async plantilla(): Promise<PlantillaActualizacionMasiva> {
     const { data } = await api.get<PlantillaActualizacionMasiva>('/empleados/actualizacion-masiva/plantilla')
     return data

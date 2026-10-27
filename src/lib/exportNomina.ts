@@ -151,16 +151,13 @@ export async function exportarNominaExcel(planilla: PlanillaNomina, empresa: str
     { header: 'Código', key: 'codigo', width: 12 },
     { header: 'Nombre', key: 'nombre', width: 36 },
     { header: 'Forma de pago', key: 'formaPago', width: 15 },
-    { header: 'Código banco', key: 'codigoBanco', width: 13 },
-    { header: 'Banco', key: 'bancoNombre', width: 24 },
+    { header: 'Código de banco', key: 'codigoBanco', width: 16 },
     { header: 'Tipo de cuenta', key: 'tipoCuenta', width: 15 },
     { header: 'No. cuenta', key: 'numeroCuenta', width: 20 },
     { header: 'Líquido', key: 'liquido', width: 14, style: { numFmt: '"Q" #,##0.00' } },
   ]
   banco.getRow(1).font = { bold: true }
-  for (const l of planilla.lineas) {
-    banco.addRow({ ...l, codigoBanco: l.banco?.codigo ?? l.codigoBanco, bancoNombre: l.banco?.nombre ?? 'Sin equivalencia' })
-  }
+  for (const l of planilla.lineas) banco.addRow(l)
 
   const buffer = await wb.xlsx.writeBuffer()
   const nombre = `Planilla_${planilla.anio}-${String(planilla.mes).padStart(2, '0')}${planilla.quincena === 0 ? '-Mensual' : `-Q${planilla.quincena}`}.xlsx`

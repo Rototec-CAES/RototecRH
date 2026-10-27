@@ -1055,7 +1055,7 @@ export interface ReabrirResult {
 // ───────── Actualización masiva de empleados (Excel) ─────────
 
 /** Tipo de dato de una columna editable de la plantilla. */
-export type TipoCampoMasivo = 'texto' | 'numero' | 'fecha' | 'booleano' | 'catalogo' | 'banco' | 'referencia'
+export type TipoCampoMasivo = 'texto' | 'numero' | 'fecha' | 'booleano' | 'catalogo' | 'referencia'
 
 /** Columna editable de la plantilla (GET /rrhh/empleados/actualizacion-masiva/plantilla). */
 export interface CampoActualizacionMasiva {
@@ -1068,16 +1068,9 @@ export interface CampoActualizacionMasiva {
   ejemplo: string
 }
 
-export interface BancoCatalogoMasivo {
-  codigo: string
-  nombre: string
-  pais: string | null
-}
-
-/** Columnas, catálogo de bancos y una fila por empleado activo con sus valores actuales. */
+/** Columnas y una fila por empleado activo con sus valores actuales. */
 export interface PlantillaActualizacionMasiva {
   campos: CampoActualizacionMasiva[]
-  bancos: BancoCatalogoMasivo[]
   /** id (solo lectura) + un valor por campo editable. */
   filas: Record<string, string | number | null>[]
 }
@@ -1103,7 +1096,10 @@ export interface CambioActualizacionMasiva {
 
 export interface FilaValidadaMasiva {
   fila: number | null
+  /** null en un empleado nuevo. */
   id: number | null
+  /** Fila sin ID: se crea un empleado nuevo. */
+  nuevo: boolean
   codigo: string | null
   nombre: string | null
   cambios: CambioActualizacionMasiva[]
@@ -1114,6 +1110,8 @@ export interface ResultadoValidacionMasiva {
   filas: FilaValidadaMasiva[]
   resumen: {
     total: number
+    /** Empleados nuevos sin errores. */
+    nuevos: number
     conCambios: number
     sinCambios: number
     conErrores: number
@@ -1124,4 +1122,5 @@ export interface ResultadoValidacionMasiva {
 export interface ResultadoAplicarMasiva {
   actualizados: number
   camposActualizados: number
+  creados: number
 }
