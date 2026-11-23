@@ -3,6 +3,7 @@ import { empleadosApi } from '@/api/employees'
 import { actualizacionMasivaApi } from '@/api/actualizacionMasiva'
 import type {
   BajaInput,
+  CatalogosMasivaInput,
   CreateEmpleadoInput,
   CreateEmpleadoResponse,
   EmpleadoInput,
@@ -126,6 +127,19 @@ export function usePlantillaActualizacionMasiva() {
 export function useValidarActualizacionMasiva() {
   return useMutation({
     mutationFn: (filas: FilaActualizacionMasiva[]) => actualizacionMasivaApi.validar(filas),
+  })
+}
+
+export function useCatalogosActualizacionMasiva() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: CatalogosMasivaInput) => actualizacionMasivaApi.catalogos(input),
+    onSuccess: () => {
+      // Puestos/departamentos nuevos: refrescar catálogos y árbol organizacional.
+      qc.invalidateQueries({ queryKey: ['estructura'] })
+      qc.invalidateQueries({ queryKey: ['company'] })
+      qc.invalidateQueries({ queryKey: ['arbol-organizacional'] })
+    },
   })
 }
 

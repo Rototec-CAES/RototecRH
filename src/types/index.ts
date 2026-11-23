@@ -1124,3 +1124,16 @@ export interface ResultadoAplicarMasiva {
   camposActualizados: number
   creados: number
 }
+
+/** Departamentos y puestos nuevos del Excel que se crean antes de validar. */
+export interface CatalogosMasivaInput {
+  departamentos: { clave: string; nombre: string; empresaId: number }[]
+  /** idDepartamento (existente) o claveDepartamento (uno nuevo de este mismo request). */
+  puestos: { nombre: string; idDepartamento?: number; claveDepartamento?: string }[]
+}
+
+export interface CatalogosMasivaResultado {
+  departamentos: { clave: string; id: number; nombre: string }[]
+  /** Mismo orden que los puestos enviados. */
+  puestos: { nombre: string; id: number; idDepartamento: number }[]
+}

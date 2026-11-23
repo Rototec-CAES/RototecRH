@@ -63,12 +63,23 @@ export default function AsignarTab() {
   }
   const { data, isLoading, isError, isFetching, refetch } = useElegibles(filtros)
 
+  // Puesto name resolver fallback
+  const puestoMap = useMemo(() => {
+    const m = new Map<number, string>()
+    for (const o of puestoOptions) m.set(o.id, o.nombre)
+    return m
+  }, [puestoOptions])
+
+  // Busca por nombre del empleado o por nombre del puesto (ej. "Operario")
   const elegibles = useMemo(() => {
     const all = data ?? []
     if (!search.trim()) return all
     const q = norm(search.trim())
-    return all.filter((e) => norm(e.nombre).includes(q))
-  }, [data, search])
+    return all.filter((e) =>
+      norm(e.nombre).includes(q) ||
+      norm(e.puestoNombre ?? puestoMap.get(e.idPuesto) ?? '').includes(q),
+    )
+  }, [data, search, puestoMap])
 
   // Multi-select state
   const [selected, setSelected] = useState<Set<number>>(new Set())
@@ -113,13 +124,6 @@ export default function AsignarTab() {
   // Secundaria dialog state
   const [secundariaFor, setSecundariaFor] = useState<EmpleadoCapElegible | undefined>()
 
-  // Puesto name resolver fallback
-  const puestoMap = useMemo(() => {
-    const m = new Map<number, string>()
-    for (const o of puestoOptions) m.set(o.id, o.nombre)
-    return m
-  }, [puestoOptions])
-
   // Pensum name resolver fallback
   const pensumMap = useMemo(() => {
     const m = new Map<number, string>()
@@ -157,11 +161,11 @@ export default function AsignarTab() {
             />
           </div>
           <div>
-            <FieldLabel>Buscar empleado</FieldLabel>
+            <FieldLabel>Buscar</FieldLabel>
             <TableSearch
               value={search}
               onChange={(v) => { setSearch(v); resetFilters() }}
-              placeholder="Nombre del empleado"
+              placeholder="Empleado o puesto"
               className="sm:w-60"
               testId={`${TID}__filtro-busqueda-asignar`}
             />

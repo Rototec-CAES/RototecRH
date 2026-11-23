@@ -1,4 +1,6 @@
 import type {
+  CatalogosMasivaInput,
+  CatalogosMasivaResultado,
   FilaActualizacionMasiva,
   PlantillaActualizacionMasiva,
   ResultadoAplicarMasiva,
@@ -19,6 +21,11 @@ export const actualizacionMasivaApi = {
   /** Devuelve, por fila, los cambios (anterior → nuevo) y los errores. No escribe nada. */
   async validar(filas: FilaActualizacionMasiva[]): Promise<ResultadoValidacionMasiva> {
     const { data } = await api.post<ResultadoValidacionMasiva>('/empleados/actualizacion-masiva/validar', { filas })
+    return data
+  },
+  /** Crea los departamentos y puestos nuevos del Excel (una transacción) y devuelve sus IDs. */
+  async catalogos(input: CatalogosMasivaInput): Promise<CatalogosMasivaResultado> {
+    const { data } = await api.post<CatalogosMasivaResultado>('/empleados/actualizacion-masiva/catalogos', input)
     return data
   },
   /** Re-valida y aplica todo en una sola transacción (400 si hay cualquier error). */

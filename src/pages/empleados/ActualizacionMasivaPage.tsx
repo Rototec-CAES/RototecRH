@@ -36,6 +36,8 @@ import {
   descargarPlantillaActualizacionMasiva,
   leerArchivoActualizacionMasiva,
 } from '@/lib/actualizacionMasivaExcel'
+import { detectarReferenciasNuevas, type ReferenciasNuevas } from '@/lib/catalogosMasiva'
+import { CatalogosNuevosMasiva } from './CatalogosNuevosMasiva'
 import { cn, formatDate, formatQ } from '@/lib/utils'
 import type {
   CambioActualizacionMasiva,
@@ -94,6 +96,8 @@ export default function ActualizacionMasivaPage() {
   const [filtro, setFiltro] = useState<Filtro>('TODOS')
   const [confirmar, setConfirmar] = useState(false)
   const [resultado, setResultado] = useState<ResultadoAplicarMasiva | null>(null)
+  /** Puestos/departamentos del Excel que no existen: se resuelven antes de validar. */
+  const [refsNuevas, setRefsNuevas] = useState<ReferenciasNuevas | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const resumen = validacion?.resumen
@@ -132,6 +136,7 @@ export default function ActualizacionMasivaPage() {
     setArchivo(null)
     setFilas(null)
     setValidacion(null)
+    setRefsNuevas(null)
     setFiltro('TODOS')
     if (fileRef.current) fileRef.current.value = ''
   }
@@ -147,6 +152,12 @@ export default function ActualizacionMasivaPage() {
     try {
       const leidas = await leerArchivoActualizacionMasiva(file, plantilla.data.campos)
       setFilas(leidas)
+      const nuevas = detectarReferenciasNuevas(leidas, plantilla.data.campos)
+      if (nuevas.departamentos.length || nuevas.puestos.length) {
+        // Primero se crean/asocian los puestos y departamentos; después se valida.
+        setRefsNuevas(nuevas)
+        return
+      }
       setValidacion(await validarMut.mutateAsync(leidas))
     } catch (err) {
       setArchivo(null)
@@ -154,6 +165,21 @@ export default function ActualizacionMasivaPage() {
     } finally {
       setLeyendo(false)
       if (fileRef.current) fileRef.current.value = ''
+    }
+  }
+
+  /** Catálogos listos: las filas ya traen los IDs de los puestos/departamentos creados o asociados. */
+  async function onCatalogosResueltos(resueltas: FilaActualizacionMasiva[]) {
+    setRefsNuevas(null)
+    setFilas(resueltas)
+    setLeyendo(true)
+    try {
+      await plantilla.refetch() // catálogo con los nuevos (para el detalle "ID - Nombre" y otra carga)
+      setValidacion(await validarMut.mutateAsync(resueltas))
+    } catch (err) {
+      toast.error(extractApiErrorMessage(err))
+    } finally {
+      setLeyendo(false)
     }
   }
 
@@ -306,6 +332,16 @@ export default function ActualizacionMasivaPage() {
                   onChange={(e) => e.target.files?.[0] && onArchivo(e.target.files[0])}
                 />
               </div>
+
+              {refsNuevas && filas && plantilla.data && !leyendo && (
+                <CatalogosNuevosMasiva
+                  nuevos={refsNuevas}
+                  campos={plantilla.data.campos}
+                  filas={filas}
+                  onResuelto={onCatalogosResueltos}
+                  onCancelar={limpiar}
+                />
+              )}
 
               {resumen && (
                 <>
