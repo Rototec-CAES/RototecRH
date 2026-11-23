@@ -1123,6 +1123,19 @@ export interface ResultadoAplicarMasiva {
   actualizados: number
   camposActualizados: number
   creados: number
+  /** IDs de los empleados nuevos (quedan sin biométrico hasta registrarlos). */
+  idsCreados?: number[]
+}
+
+/** Empleado activo que no está en el biométrico (sin codigo_empleado_bio). */
+export interface EmpleadoSinBiometrico {
+  id: number
+  codigo: string | null
+  nombre: string | null
+  apellido: string | null
+  puesto: string | null
+  departamento: string | null
+  fechaContratacion: string | null
 }
 
 /** Departamentos y puestos nuevos del Excel que se crean antes de validar. */

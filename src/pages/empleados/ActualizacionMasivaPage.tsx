@@ -38,6 +38,7 @@ import {
 } from '@/lib/actualizacionMasivaExcel'
 import { detectarReferenciasNuevas, type ReferenciasNuevas } from '@/lib/catalogosMasiva'
 import { CatalogosNuevosMasiva } from './CatalogosNuevosMasiva'
+import { SinBiometricoMasiva } from './SinBiometricoMasiva'
 import { cn, formatDate, formatQ } from '@/lib/utils'
 import type {
   CambioActualizacionMasiva,
@@ -528,7 +529,7 @@ export default function ActualizacionMasivaPage() {
                 </p>
                 {resultado.creados > 0 && (
                   <p className="mt-1 text-xs text-amber-700">
-                    Los empleados nuevos no quedaron registrados en el biométrico; regístrelos aparte para que puedan marcar.
+                    Los empleados nuevos no quedaron registrados en el biométrico; regístrelos en la tabla de abajo para que puedan marcar.
                   </p>
                 )}
               </div>
@@ -540,6 +541,9 @@ export default function ActualizacionMasivaPage() {
                   <Icon icon="solar:refresh-linear" />
                   Nueva actualización
                 </Button>
+              </div>
+              <div className="border-t border-slate-100 pt-5">
+                <SinBiometricoMasiva idsCreados={resultado.idsCreados ?? []} />
               </div>
             </div>
           )}

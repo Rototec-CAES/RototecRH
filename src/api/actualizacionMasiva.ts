@@ -1,6 +1,7 @@
 import type {
   CatalogosMasivaInput,
   CatalogosMasivaResultado,
+  EmpleadoSinBiometrico,
   FilaActualizacionMasiva,
   PlantillaActualizacionMasiva,
   ResultadoAplicarMasiva,
@@ -26,6 +27,19 @@ export const actualizacionMasivaApi = {
   /** Crea los departamentos y puestos nuevos del Excel (una transacción) y devuelve sus IDs. */
   async catalogos(input: CatalogosMasivaInput): Promise<CatalogosMasivaResultado> {
     const { data } = await api.post<CatalogosMasivaResultado>('/empleados/actualizacion-masiva/catalogos', input)
+    return data
+  },
+  /** Empleados activos que no están en el biométrico. */
+  async sinBiometrico(): Promise<EmpleadoSinBiometrico[]> {
+    const { data } = await api.get<EmpleadoSinBiometrico[]>('/empleados/sin-biometrico')
+    return data
+  },
+  /** Registra en BioTime a un empleado existente y devuelve su código de biométrico. */
+  async registrarBiometrico(
+    id: number,
+    body: { departamento_biotime: number; ubicacion_biometrico: number },
+  ): Promise<{ id: number; codigoEmpleadoBio: number }> {
+    const { data } = await api.post<{ id: number; codigoEmpleadoBio: number }>(`/empleados/${id}/biometrico`, body)
     return data
   },
   /** Re-valida y aplica todo en una sola transacción (400 si hay cualquier error). */
