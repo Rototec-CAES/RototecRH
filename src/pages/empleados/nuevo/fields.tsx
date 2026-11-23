@@ -51,6 +51,7 @@ export function TextField({
   type = 'text',
   placeholder,
   disabled,
+  step,
 }: {
   name: Name
   label: string
@@ -58,6 +59,8 @@ export function TextField({
   type?: string
   placeholder?: string
   disabled?: boolean
+  /** Solo para type="number". Sin esto el navegador usa step=1 y rechaza decimales. */
+  step?: string
 }) {
   const {
     register,
@@ -68,6 +71,7 @@ export function TextField({
     <FieldShell label={label} required={required} error={err}>
       <Input
         type={type}
+        step={step}
         placeholder={placeholder}
         disabled={disabled}
         aria-invalid={!!err}

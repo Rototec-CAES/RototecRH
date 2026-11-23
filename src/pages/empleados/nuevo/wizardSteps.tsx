@@ -197,7 +197,7 @@ export function StepContent({ index }: { index: number }) {
           <SelectField name="tipo_contrato" label="Tipo de contrato" required options={tiposContrato} />
           <TextField name="fecha_contratacion" label="Fecha de ingreso" required type="date" />
           <TextField name="fecha_reingreso" label="Fecha de reingreso" type="date" />
-          <TextField name="salario_base_contrato" label="Salario base (Q)" required type="number" />
+          <TextField name="salario_base_contrato" label="Salario base (Q)" required type="number" step="0.01" />
           <TextField name="profesion" label="Profesión" />
           <TextField name="titulo" label="Título / diploma" />
           <SelectField name="forma_pago" label="Forma de pago" required options={formasPago} />
