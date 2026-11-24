@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Icon } from '@iconify/react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -39,6 +39,10 @@ import {
 import { detectarReferenciasNuevas, type ReferenciasNuevas } from '@/lib/catalogosMasiva'
 import { CatalogosNuevosMasiva } from './CatalogosNuevosMasiva'
 import { SinBiometricoMasiva } from './SinBiometricoMasiva'
+import { Checkbox } from '@/components/ui/checkbox'
+import { useEmpleadosBackendList } from '@/hooks/useEmpleados'
+import { usePuestoOptions } from '@/hooks/usePuestoOptions'
+import { faltantesDesdeEmpleado } from '@/lib/fichaEmpleado'
 import { cn, formatDate, formatQ } from '@/lib/utils'
 import type {
   CambioActualizacionMasiva,
@@ -92,6 +96,8 @@ export default function ActualizacionMasivaPage() {
   const [descargando, setDescargando] = useState(false)
   const [leyendo, setLeyendo] = useState(false)
   const [archivo, setArchivo] = useState<string | null>(null)
+  /** Columnas del Excel que no corresponden a ningún campo editable (se ignoran; se avisa). */
+  const [ignoradas, setIgnoradas] = useState<{ nombre: string; conDatos: number }[]>([])
   const [filas, setFilas] = useState<FilaActualizacionMasiva[] | null>(null)
   const [validacion, setValidacion] = useState<ResultadoValidacionMasiva | null>(null)
   const [filtro, setFiltro] = useState<Filtro>('TODOS')
@@ -118,14 +124,34 @@ export default function ActualizacionMasivaPage() {
     return [...filtradas].sort((a, b) => Number(b.errores.length > 0) - Number(a.errores.length > 0))
   }, [validacion, filtro])
 
+  // "Completar con Excel" desde Empleados llega con ?solo=incompletas: plantilla solo con fichas incompletas
+  // (misma regla que el filtro "Ficha incompleta" del listado y que la pantalla de edición).
+  const [searchParams] = useSearchParams()
+  const [soloIncompletas, setSoloIncompletas] = useState(searchParams.get('solo') === 'incompletas')
+  const empleadosQ = useEmpleadosBackendList()
+  const { options: puestosUbic } = usePuestoOptions()
+  const idsIncompletos = useMemo(
+    () =>
+      new Set(
+        (empleadosQ.data ?? [])
+          .filter((e) => e.estaActivo && faltantesDesdeEmpleado(e, puestosUbic).total > 0)
+          .map((e) => e.id),
+      ),
+    [empleadosQ.data, puestosUbic],
+  )
+
   async function descargar() {
     setDescargando(true)
     try {
       // Siempre con datos frescos (otro usuario pudo editar a alguien).
       const { data } = await plantilla.refetch()
       if (!data) throw new Error('No se pudo obtener la plantilla')
-      await descargarPlantillaActualizacionMasiva(data)
-      toast.success(`Plantilla descargada con ${data.filas.length} empleados activos`)
+      const filas = soloIncompletas ? data.filas.filter((f) => idsIncompletos.has(Number(f.id))) : data.filas
+      if (!filas.length) throw new Error('No hay empleados con ficha incompleta para descargar')
+      await descargarPlantillaActualizacionMasiva({ ...data, filas })
+      toast.success(
+        `Plantilla descargada con ${filas.length} empleado${filas.length === 1 ? '' : 's'}${soloIncompletas ? ' con ficha incompleta' : ' activos'}`,
+      )
     } catch (err) {
       toast.error(extractApiErrorMessage(err))
     } finally {
@@ -135,6 +161,7 @@ export default function ActualizacionMasivaPage() {
 
   function limpiar() {
     setArchivo(null)
+    setIgnoradas([])
     setFilas(null)
     setValidacion(null)
     setRefsNuevas(null)
@@ -151,7 +178,13 @@ export default function ActualizacionMasivaPage() {
     setArchivo(file.name)
     setLeyendo(true)
     try {
-      const leidas = await leerArchivoActualizacionMasiva(file, plantilla.data.campos)
+      const { filas: leidas, columnasIgnoradas } = await leerArchivoActualizacionMasiva(file, plantilla.data.campos)
+      setIgnoradas(columnasIgnoradas)
+      const conDatos = columnasIgnoradas.filter((c) => c.conDatos > 0)
+      if (conDatos.length)
+        toast.warning(
+          `${conDatos.length} columna${conDatos.length === 1 ? '' : 's'} del Excel no se cargará${conDatos.length === 1 ? '' : 'n'}: ${conDatos.map((c) => c.nombre).join(', ')}`,
+        )
       setFilas(leidas)
       const nuevas = detectarReferenciasNuevas(leidas, plantilla.data.campos)
       if (nuevas.departamentos.length || nuevas.puestos.length) {
@@ -215,7 +248,7 @@ export default function ActualizacionMasivaPage() {
         <PageHeader
           titulo="Actualización masiva"
           icono="solar:document-add-bold"
-          descripcion="Completa datos de nómina, contrato, banco, IGSS y contacto de muchos empleados a la vez con un Excel."
+          descripcion="Completa datos personales, culturales, de nómina, contrato, banco, IGSS y contacto de muchos empleados a la vez con un Excel."
         >
           <Button variant="outline" onClick={() => navigate('/empleados')}>
             <Icon icon="solar:alt-arrow-left-linear" />
@@ -283,6 +316,21 @@ export default function ActualizacionMasivaPage() {
                 </div>
               ) : null}
 
+              <label className="flex w-fit cursor-pointer items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                <Checkbox
+                  checked={soloIncompletas}
+                  onCheckedChange={(v) => setSoloIncompletas(Boolean(v))}
+                  data-testid="rh-actualizacion-masiva__solo-incompletas"
+                />
+                <span>
+                  Solo empleados con <b>ficha incompleta</b>
+                  {empleadosQ.data && <span className="text-amber-700"> ({idsIncompletos.size})</span>}
+                  <span className="block text-xs text-amber-800/80">
+                    Para completar de una vez los datos que les faltan. Las celdas vacías no borran nada.
+                  </span>
+                </span>
+              </label>
+
               <div className="flex flex-wrap gap-2">
                 <Button
                   onClick={descargar}
@@ -342,6 +390,39 @@ export default function ActualizacionMasivaPage() {
                   onResuelto={onCatalogosResueltos}
                   onCancelar={limpiar}
                 />
+              )}
+
+              {archivo && ignoradas.length > 0 && (
+                <Alert
+                  variant={ignoradas.some((c) => c.conDatos > 0) ? 'warning' : 'info'}
+                  data-testid="rh-actualizacion-masiva__columnas-ignoradas"
+                >
+                  <Icon icon="solar:danger-triangle-bold" width={18} />
+                  <AlertTitle>
+                    {ignoradas.length} columna{ignoradas.length === 1 ? '' : 's'} del Excel no se carga
+                    {ignoradas.length === 1 ? '' : 'n'}
+                  </AlertTitle>
+                  <AlertDescription>
+                    <p>
+                      Estas columnas no corresponden a ningún dato que se pueda actualizar por carga masiva, así que{' '}
+                      <strong>sus valores se ignoran</strong>:
+                    </p>
+                    <ul className="mt-1 list-disc pl-5">
+                      {ignoradas.map((c) => (
+                        <li key={c.nombre}>
+                          <strong>“{c.nombre}”</strong>
+                          {c.conDatos > 0
+                            ? ` — ${c.conDatos} fila${c.conDatos === 1 ? '' : 's'} con datos que NO se guardarán`
+                            : ' — vacía'}
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="mt-1.5 text-xs">
+                      El encabezado debe ser exactamente el de la plantilla (por ejemplo, “Fecha de nacimiento”). Descargue
+                      la plantilla actual para ver todas las columnas disponibles.
+                    </p>
+                  </AlertDescription>
+                </Alert>
               )}
 
               {resumen && (

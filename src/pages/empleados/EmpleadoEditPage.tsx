@@ -7,19 +7,39 @@ import { Icon } from '@iconify/react'
 import { Button } from '@/components/ui/button'
 import { Panel } from '@/shared/report/report-ui'
 import { Skeleton } from '@/components/ui/skeleton'
-import { empleadoCreateSchema, type EmpleadoCreateValues } from '@/lib/validators'
+import { crearEsquemaEdicionEmpleado, type EmpleadoCreateValues } from '@/lib/validators'
 import type { CreateEmpleadoInput, EmpleadoBackend } from '@/types'
 import { useActualizarEmpleado, useEmpleadoBackend } from '@/hooks/useEmpleados'
 import { extractApiErrorMessage } from '@/api/client'
 import { StepContent } from './nuevo/wizardSteps'
 import { EmpleadoStatusBadge } from './EmpleadoStatusBadge'
-import { usePuestoOptions } from '@/hooks/usePuestoOptions'
+import { usePuestoOptions, type PuestoOption } from '@/hooks/usePuestoOptions'
+import {
+  SECCIONES_FICHA,
+  faltantesDesdeFormulario,
+  ubicacionDesdePuesto,
+  vacioFicha,
+} from '@/lib/fichaEmpleado'
 import { getInitials } from '@/lib/utils'
 import { separarNombreCompleto } from '@/lib/nombres'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 
+/**
+ * Sistemas anteriores guardaron el TEXTO "null"/"undefined" en varios campos (correo, sexo, nombres…).
+ * Para el formulario eso es un campo vacío; si no, un correo "null" no pasa la validación y bloquea guardar.
+ */
+function sinNulosDeTexto<T extends Record<string, unknown>>(o: T): T {
+  return Object.fromEntries(
+    Object.entries(o).map(([k, v]) => [k, typeof v === 'string' && /^\s*(null|undefined)?\s*$/i.test(v) ? '' : v]),
+  ) as T
+}
+
 /** EmpleadoBackend (camelCase) → valores del formulario (snake_case del wizard). */
 function aValoresForm(e: EmpleadoBackend): Partial<EmpleadoCreateValues> {
+  return sinNulosDeTexto(aValoresFormCrudo(e))
+}
+
+function aValoresFormCrudo(e: EmpleadoBackend): Partial<EmpleadoCreateValues> {
   const dia = (s: string | null) => (s ? s.slice(0, 10) : '')
   return {
     PAIS: e.pais ?? '',
@@ -87,12 +107,7 @@ function useResetOnChange(value: unknown, reset: () => void) {
   }, [value])
 }
 
-const SECCIONES = [
-  { id: 'organizacion', titulo: 'Organización', icono: 'solar:structure-bold' },
-  { id: 'personales', titulo: 'Datos personales', icono: 'solar:user-id-bold' },
-  { id: 'culturales', titulo: 'Datos culturales', icono: 'solar:globus-bold' },
-  { id: 'contrato', titulo: 'Contrato y pago', icono: 'solar:wallet-money-bold' },
-] as const
+const SECCIONES = SECCIONES_FICHA
 type SeccionId = (typeof SECCIONES)[number]['id']
 
 function Seccion({ id, faltan, children }: { id: SeccionId; faltan: string[]; children: React.ReactNode }) {
@@ -124,41 +139,7 @@ function Seccion({ id, faltan, children }: { id: SeccionId; faltan: string[]; ch
   )
 }
 
-/** Campos OBLIGATORIOS de cada sección (los que bloquean "Guardar" si están vacíos). */
-const OBLIGATORIOS: Record<SeccionId, [keyof EmpleadoCreateValues, string][]> = {
-  organizacion: [
-    ['PAIS', 'País'],
-    ['empresa_id', 'Empresa'],
-    ['id_departamento', 'Departamento'],
-    ['id_sub_departamento', 'Sub-departamento'],
-    ['id_puesto', 'Puesto'],
-  ],
-  personales: [
-    ['primer_nombre', 'Primer nombre'],
-    ['primer_apellido', 'Primer apellido'],
-    ['numero_identificacion_nacional', 'Documento de identificación'],
-    ['id_tributario', 'NIT / ID tributario'],
-    ['id_seguro_social', 'No. seguro social'],
-    ['fecha_nacimiento', 'Fecha de nacimiento'],
-    ['sexo', 'Sexo'],
-    ['estado_civil', 'Estado civil'],
-    ['tipo_discapacidad', 'Tipo de discapacidad'],
-  ],
-  culturales: [
-    ['pueblo_pertenencia', 'Pueblo de pertenencia'],
-    ['comunidad_linguistica', 'Comunidad lingüística'],
-  ],
-  contrato: [
-    ['jornada', 'Jornada'],
-    ['temporalidad_contrato', 'Temporalidad'],
-    ['tipo_contrato', 'Tipo de contrato'],
-    ['fecha_contratacion', 'Fecha de ingreso'],
-    ['salario_base_contrato', 'Salario base'],
-    ['forma_pago', 'Forma de pago'],
-  ],
-}
-const vacio = (v: unknown) =>
-  v === undefined || v === null || (typeof v === 'string' && v.trim() === '') || (typeof v === 'number' && Number.isNaN(v))
+const vacio = vacioFicha
 
 /** Nombre para el encabezado: partes del nombre o, si faltan (carga masiva), nombre + apellido. */
 function nombreEmpleado(e: EmpleadoBackend) {
@@ -172,14 +153,39 @@ function nombreEmpleado(e: EmpleadoBackend) {
   return (partes.length ? partes : [limpio(e.nombre), limpio(e.apellido)].filter(Boolean)).join(' ') || `Empleado ${e.id}`
 }
 
-function EditForm({ id, empleado }: { id: string; empleado: EmpleadoBackend }) {
+function EditForm({
+  id,
+  empleado,
+  puestos,
+}: {
+  id: string
+  empleado: EmpleadoBackend
+  puestos: PuestoOption[]
+}) {
   const navigate = useNavigate()
   const mut = useActualizarEmpleado(id)
-  const { options: puestoOptions } = usePuestoOptions()
+  const puestoOptions = puestos
+  // Empleados con puesto pero sin sub-departamento (carga masiva): se deduce del puesto. Va en los valores
+  // INICIALES para que la cascada no lo tome como un cambio y no borre el puesto.
+  const ubicacionDeducida = useMemo(
+    () =>
+      empleado.idSubDepartamento == null
+        ? ubicacionDesdePuesto(empleado.idPuesto, empleado.idDepartamento, puestos)
+        : null,
+    [empleado, puestos],
+  )
   const form = useForm<EmpleadoCreateValues>({
-    resolver: zodResolver(empleadoCreateSchema),
+    // Un DPI viejo (p. ej. incompleto, aceptado por la carga masiva) no bloquea guardar otros datos;
+    // si el usuario lo cambia, sí se valida completo.
+    resolver: zodResolver(crearEsquemaEdicionEmpleado({ dpiOriginal: empleado.numeroIdentificacionNacional })),
     mode: 'onTouched',
-    defaultValues: aValoresForm(empleado),
+    defaultValues: {
+      ...aValoresForm(empleado),
+      ...(ubicacionDeducida && {
+        id_sub_departamento: ubicacionDeducida.idSubDepartamento,
+        id_departamento: ubicacionDeducida.idDepartamento ?? undefined,
+      }),
+    },
   })
 
   // Cascada: cambiar un padre limpia a sus hijos (sin pisar el prefill en el montaje).
@@ -227,10 +233,7 @@ function EditForm({ id, empleado }: { id: string; empleado: EmpleadoBackend }) {
   }, [nombreSugerido])
 
   const valores = form.watch()
-  const faltanPor = Object.fromEntries(
-    SECCIONES.map((sec) => [sec.id, OBLIGATORIOS[sec.id].filter(([k]) => vacio(valores[k])).map(([, l]) => l)]),
-  ) as Record<SeccionId, string[]>
-  const totalFaltan = Object.values(faltanPor).reduce((a, l) => a + l.length, 0)
+  const { porSeccion: faltanPor, total: totalFaltan } = faltantesDesdeFormulario(valores)
 
   const nombre = nombreEmpleado(empleado)
   const puesto = puestoOptions.find((p) => p.id === empleado.idPuesto)?.nombre
@@ -345,6 +348,16 @@ function EditForm({ id, empleado }: { id: string; empleado: EmpleadoBackend }) {
       <FormProvider {...form}>
         <form onSubmit={form.handleSubmit(onSubmit, () => toast.error('Revise los campos marcados en rojo'))} className="space-y-5">
           <Seccion id="organizacion" faltan={faltanPor.organizacion}>
+            {ubicacionDeducida && (
+              <Alert variant="info" className="mb-4">
+                <Icon icon="solar:magic-stick-3-bold" width={18} />
+                <AlertTitle>Sub-departamento completado a partir del puesto</AlertTitle>
+                <AlertDescription>
+                  El empleado no tenía sub-departamento; se tomó el del puesto{puesto ? ` “${puesto}”` : ''}. Revíselo; se
+                  guarda junto con los demás cambios.
+                </AlertDescription>
+              </Alert>
+            )}
             <div className="grid gap-4 sm:grid-cols-2">
               <StepContent index={0} />
               <StepContent index={1} />
@@ -413,13 +426,14 @@ function EditForm({ id, empleado }: { id: string; empleado: EmpleadoBackend }) {
 export default function EmpleadoEditPage() {
   const { id } = useParams<{ id: string }>()
   const { data, isLoading, isError } = useEmpleadoBackend(id)
+  const { options: puestos, isLoading: cargandoPuestos } = usePuestoOptions()
 
-  if (isLoading) return <Skeleton className="mx-auto h-96 max-w-4xl rounded-2xl" />
+  if (isLoading || cargandoPuestos) return <Skeleton className="mx-auto h-96 max-w-4xl rounded-2xl" />
   if (isError || !data || !id)
     return (
       <p className="mx-auto max-w-4xl rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-800">
         No se pudo cargar el empleado.
       </p>
     )
-  return <EditForm id={id} empleado={data} />
+  return <EditForm id={id} empleado={data} puestos={puestos} />
 }

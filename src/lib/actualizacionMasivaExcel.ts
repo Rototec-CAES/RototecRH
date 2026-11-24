@@ -244,11 +244,13 @@ function valorCelda(v: ExcelJS.CellValue): string | number | boolean | undefined
 /**
  * Lee el Excel editado → filas para el backend. Ubica las columnas por su encabezado
  * (etiqueta o nombre técnico), así que el orden de columnas no importa.
+ * Devuelve también las columnas que NO se reconocieron (y cuántas filas traían dato en ellas),
+ * para avisar al usuario en vez de ignorarlas en silencio.
  */
 export async function leerArchivoActualizacionMasiva(
   file: File,
   campos: CampoActualizacionMasiva[],
-): Promise<FilaActualizacionMasiva[]> {
+): Promise<{ filas: FilaActualizacionMasiva[]; columnasIgnoradas: { nombre: string; conDatos: number }[] }> {
   const { Workbook } = (await import('exceljs')).default
   const wb = new Workbook()
   try {
@@ -268,12 +270,18 @@ export async function leerArchivoActualizacionMasiva(
   for (const alias of ['Fecha de contratación', 'Fecha contratación', 'Fecha de ingreso', 'Fecha ingreso']) {
     if (campos.some((c) => c.campo === 'fecha_contratacion')) porEncabezado.set(normalizar(alias), 'fecha_contratacion')
   }
+  for (const alias of ['Fecha nacimiento', 'Fecha de nac', 'Fecha de nac.', 'Fecha nac', 'Nacimiento']) {
+    if (campos.some((c) => c.campo === 'fecha_nacimiento')) porEncabezado.set(normalizar(alias), 'fecha_nacimiento')
+  }
   // Si dos columnas apuntan al mismo dato (p. ej. "Fecha de ingreso" y "Fecha de contratación"),
   // se usa la primera que traiga valor en cada fila.
   const columnas = new Map<number, string>()
+  const ignoradas = new Map<number, string>()
   ws.getRow(1).eachCell((cell, col) => {
-    const campo = porEncabezado.get(normalizar(String(valorCelda(cell.value) ?? '')))
+    const titulo = String(valorCelda(cell.value) ?? '').trim()
+    const campo = porEncabezado.get(normalizar(titulo))
     if (campo && (campo !== 'id' || ![...columnas.values()].includes('id'))) columnas.set(col, campo)
+    else if (titulo && !campo) ignoradas.set(col, titulo)
   })
   if (![...columnas.values()].includes('id')) {
     throw new Error('No se encontró la columna "ID" en la hoja de empleados. Use la plantilla descargada.')
@@ -296,5 +304,13 @@ export async function leerArchivoActualizacionMasiva(
     if (conDatos) filas.push(fila)
   })
   if (!filas.length) throw new Error('El archivo no tiene filas con datos.')
-  return filas
+
+  const columnasIgnoradas = [...ignoradas].map(([col, nombre]) => {
+    let conDatos = 0
+    ws.eachRow((row, numero) => {
+      if (numero > 1 && valorCelda(row.getCell(col).value) !== undefined) conDatos++
+    })
+    return { nombre, conDatos }
+  })
+  return { filas, columnasIgnoradas }
 }

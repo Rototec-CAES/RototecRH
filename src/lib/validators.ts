@@ -308,7 +308,7 @@ const reqId = z.preprocess(
     .positive('Selecciona una opción'),
 )
 
-export const empleadoCreateSchema = z
+const empleadoBaseSchema = z
   .object({
     // cascada
     PAIS: reqStr('Selecciona el país'),
@@ -375,10 +375,30 @@ export const empleadoCreateSchema = z
     // horas extra
     habilitar_horas_extra: z.boolean().default(false),
   })
-  .superRefine((data, ctx) => {
+
+type OpcionesEmpleado = {
+  /**
+   * Edición: documento de identificación que YA tenía el empleado. Si no se cambia, no se exige su
+   * formato (hay DPIs viejos incompletos, aceptados por la carga masiva, que si no bloquearían
+   * guardar cualquier otro dato). Si se cambia, sí se valida completo.
+   */
+  dpiOriginal?: string | null
+}
+
+const soloAlfanumerico = (v: string | null | undefined) => (v ?? '').toUpperCase().replace(/[^0-9A-Z]/g, '')
+
+const refinarEmpleado =
+  (o: OpcionesEmpleado) => (data: z.infer<typeof empleadoBaseSchema>, ctx: z.RefinementCtx) => {
     // Documento de identificación: formato según el país (países sin regla: solo requerido).
     const docIdentidad = documentoIdentidad(data.PAIS)
-    if (docIdentidad && data.numero_identificacion_nacional && !docIdentidad.regex.test(data.numero_identificacion_nacional))
+    const dpiSinCambio =
+      o.dpiOriginal != null && soloAlfanumerico(o.dpiOriginal) === soloAlfanumerico(data.numero_identificacion_nacional)
+    if (
+      docIdentidad &&
+      data.numero_identificacion_nacional &&
+      !dpiSinCambio &&
+      !docIdentidad.regex.test(data.numero_identificacion_nacional)
+    )
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['numero_identificacion_nacional'],
@@ -401,7 +421,13 @@ export const empleadoCreateSchema = z
       if (!data.tipo_cuenta)
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['tipo_cuenta'], message: 'Selecciona tipo de cuenta' })
     }
-  })
+}
+
+/** Alta de empleado (wizard). */
+export const empleadoCreateSchema = empleadoBaseSchema.superRefine(refinarEmpleado({}))
+/** Edición: mismas reglas, pero un documento viejo que no se toca no bloquea el guardado. */
+export const crearEsquemaEdicionEmpleado = (o: OpcionesEmpleado) => empleadoBaseSchema.superRefine(refinarEmpleado(o))
+
 
 export type EmpleadoCreateValues = z.infer<typeof empleadoCreateSchema>
 
