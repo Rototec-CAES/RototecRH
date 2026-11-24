@@ -1150,3 +1150,16 @@ export interface CatalogosMasivaResultado {
   /** Mismo orden que los puestos enviados. */
   puestos: { nombre: string; id: number; idDepartamento: number }[]
 }
+
+/** GET /rrhh/empleados/huellas — huellas en ZKBioTime por código de biométrico (emp_code). */
+export interface HuellaBiotime {
+  codigoBio: number
+  /** El empleado existe en BioTime pero está marcado como eliminado allá. */
+  eliminadoEnBiotime: boolean
+  /** Dedos válidos registrados (0 = está en BioTime pero falta enrolar la huella). */
+  huellas: number
+  /** Última vez que el reloj subió una huella, 'AAAA-MM-DDTHH:mm:ss' en hora local (sin zona). */
+  fechaHuella: string | null
+  /** Alias del reloj donde se capturó la última huella (GARITA, LAS PALMAS…). */
+  reloj: string | null
+}

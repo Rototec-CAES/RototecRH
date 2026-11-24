@@ -7,6 +7,7 @@ import EmpleadoDetailPage from '@/pages/empleados/EmpleadoDetailPage'
 import EmpleadoCreateWizard from '@/pages/empleados/nuevo/EmpleadoCreateWizard'
 import EmpleadoEditPage from '@/pages/empleados/EmpleadoEditPage'
 import ActualizacionMasivaPage from '@/pages/empleados/ActualizacionMasivaPage'
+import BiometricoPendientesPage from '@/pages/empleados/BiometricoPendientesPage'
 import AsistenciasListPage from '@/pages/asistencias/AsistenciasListPage'
 import AsistenciaEmpleadoPage from '@/pages/asistencias/AsistenciaEmpleadoPage'
 import AusenciasPage from '@/pages/ausencias/AusenciasPage'
@@ -33,6 +34,7 @@ export const router = createBrowserRouter([
           { path: 'empleados', element: <EmpleadosListPage /> },
           { path: 'empleados/nuevo', element: <EmpleadoCreateWizard /> },
           { path: 'empleados/actualizacion-masiva', element: <ActualizacionMasivaPage /> },
+          { path: 'empleados/biometrico', element: <BiometricoPendientesPage /> },
           { path: 'empleados/:id', element: <EmpleadoDetailPage /> },
           { path: 'empleados/:id/editar', element: <EmpleadoEditPage /> },
           { path: 'asistencias', element: <AsistenciasListPage /> },

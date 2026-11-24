@@ -27,8 +27,9 @@ interface DatosBio {
 }
 
 /**
- * Resultado de la carga masiva: empleados que NO están en el biométrico (los nuevos de la carga
- * y, opcionalmente, cualquier otro activo sin código) para registrarlos en BioTime desde aquí.
+ * Empleados activos que NO están en el biométrico, para registrarlos en BioTime desde aquí.
+ * - Al final de la carga masiva: `idsCreados` = los nuevos de esa carga.
+ * - En la página "Pendientes de biométrico": sin `idsCreados`, lista todos los pendientes.
  */
 export function SinBiometricoMasiva({ idsCreados }: { idsCreados: number[] }) {
   const qc = useQueryClient()
@@ -48,6 +49,7 @@ export function SinBiometricoMasiva({ idsCreados }: { idsCreados: number[] }) {
   const [registrando, setRegistrando] = useState(false)
 
   const creados = useMemo(() => new Set(idsCreados), [idsCreados])
+  const desdeCarga = idsCreados.length > 0
   const filas = useMemo(
     () => (lista.data ?? []).filter((e) => alcance === 'TODOS' || creados.has(e.id)),
     [lista.data, alcance, creados],
@@ -102,7 +104,9 @@ export function SinBiometricoMasiva({ idsCreados }: { idsCreados: number[] }) {
       }
     }
     setRegistrando(false)
-    qc.invalidateQueries({ queryKey: ['empleados'], exact: true })
+    // Refresca el listado y la ficha, pero NO esta lista: si se recarga, los recién registrados
+    // desaparecen de ella y ya no se vería el código que se les asignó.
+    qc.invalidateQueries({ queryKey: ['empleados', 'backend'] })
     const fallidos = seleccionados.length - ok
     if (ok) toast.success(`${ok} empleado${ok === 1 ? '' : 's'} registrado${ok === 1 ? '' : 's'} en el biométrico`)
     if (fallidos) toast.error(`${fallidos} no se pudieron registrar; revise la columna Estado y reintente`)
@@ -119,19 +123,22 @@ export function SinBiometricoMasiva({ idsCreados }: { idsCreados: number[] }) {
             Pendientes de registrar en el biométrico
           </h4>
           <p className="text-sm text-slate-500">
-            La carga masiva no registra en BioTime. Elija departamento y ubicación de BioTime y registre a los
-            seleccionados para que puedan marcar.
+            {desdeCarga && 'La carga masiva no registra en BioTime. '}
+            Elija departamento y ubicación de BioTime y registre a los seleccionados para que puedan registrar su
+            huella y marcar.
           </p>
         </div>
-        <Segmented<Alcance>
-          value={alcance}
-          onChange={setAlcance}
-          disabled={registrando}
-          options={[
-            { value: 'CARGA', label: `De esta carga (${idsCreados.length})` },
-            { value: 'TODOS', label: `Todos los activos sin biométrico${lista.data ? ` (${lista.data.length})` : ''}` },
-          ]}
-        />
+        {desdeCarga && (
+          <Segmented<Alcance>
+            value={alcance}
+            onChange={setAlcance}
+            disabled={registrando}
+            options={[
+              { value: 'CARGA', label: `De esta carga (${idsCreados.length})` },
+              { value: 'TODOS', label: `Todos los activos sin biométrico${lista.data ? ` (${lista.data.length})` : ''}` },
+            ]}
+          />
+        )}
       </div>
 
       {lista.isLoading ? (
@@ -196,7 +203,7 @@ export function SinBiometricoMasiva({ idsCreados }: { idsCreados: number[] }) {
                       aria-label="Seleccionar todos"
                     />
                   </TableHead>
-                  <TableHead className="w-16">ID</TableHead>
+                  <TableHead className="w-16" title="ID interno de RRHH (no es el código del reloj)">ID RRHH</TableHead>
                   <TableHead className="min-w-[200px]">Empleado</TableHead>
                   <TableHead className="min-w-[160px]">Puesto / Departamento</TableHead>
                   <TableHead className="min-w-[200px]">Departamento BioTime</TableHead>
@@ -239,7 +246,7 @@ export function SinBiometricoMasiva({ idsCreados }: { idsCreados: number[] }) {
                       <TableCell>
                         <div className="font-medium">{[e.nombre, e.apellido].filter(Boolean).join(' ') || '—'}</div>
                         <div className="text-xs text-slate-500">
-                          {e.codigo ? `Código ${e.codigo}` : 'Sin código'}
+                          {e.codigo ? `Cód. nómina ${e.codigo}` : 'Sin código de nómina'}
                           {e.fechaContratacion ? ` · Ingreso ${formatDate(e.fechaContratacion)}` : ''}
                         </div>
                       </TableCell>

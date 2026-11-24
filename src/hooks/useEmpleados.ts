@@ -152,3 +152,27 @@ export function useAplicarActualizacionMasiva() {
     },
   })
 }
+
+/** Registra en BioTime a un empleado que todavía no tiene código de biométrico. */
+export function useRegistrarBiometrico() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (v: { id: number; departamento_biotime: number; ubicacion_biometrico: number }) =>
+      actualizacionMasivaApi.registrarBiometrico(v.id, {
+        departamento_biotime: v.departamento_biotime,
+        ubicacion_biometrico: v.ubicacion_biometrico,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: QK.all })
+    },
+  })
+}
+
+/** Huellas de BioTime (para cruzar con el listado por codigoEmpleadoBio). */
+export function useHuellasBiotime() {
+  return useQuery({
+    queryKey: [...QK.all, 'huellas'] as const,
+    queryFn: () => empleadosApi.huellas(),
+    staleTime: 60_000,
+  })
+}

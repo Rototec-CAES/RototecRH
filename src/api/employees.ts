@@ -5,6 +5,7 @@ import type {
   Empleado,
   EmpleadoBackend,
   EmpleadoInput,
+  HuellaBiotime,
 } from '@/types'
 import { rrhhApi as api, USE_MOCK } from './client'
 
@@ -150,6 +151,10 @@ function genId(): string {
 // ---------- Mock impl ----------
 
 const mockApi = {
+  async huellas(): Promise<HuellaBiotime[]> {
+    await delay()
+    return []
+  },
   async list(): Promise<Empleado[]> {
     await delay()
     return readStore()
@@ -232,6 +237,11 @@ function delay(ms = 150) {
 // ---------- Real API impl ----------
 
 const realApi = {
+  /** Huellas registradas en ZKBioTime (cantidad, fecha y reloj) por código de biométrico. */
+  async huellas(): Promise<HuellaBiotime[]> {
+    const { data } = await api.get<HuellaBiotime[]>('/empleados/huellas')
+    return data
+  },
   async list(): Promise<Empleado[]> {
     const { data } = await api.get<Empleado[]>('/empleados')
     return data
