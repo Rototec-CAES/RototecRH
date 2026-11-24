@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { FormProvider, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -15,6 +15,8 @@ import { StepContent } from './nuevo/wizardSteps'
 import { EmpleadoStatusBadge } from './EmpleadoStatusBadge'
 import { usePuestoOptions } from '@/hooks/usePuestoOptions'
 import { getInitials } from '@/lib/utils'
+import { separarNombreCompleto } from '@/lib/nombres'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 
 /** EmpleadoBackend (camelCase) → valores del formulario (snake_case del wizard). */
 function aValoresForm(e: EmpleadoBackend): Partial<EmpleadoCreateValues> {
@@ -93,17 +95,70 @@ const SECCIONES = [
 ] as const
 type SeccionId = (typeof SECCIONES)[number]['id']
 
-function Seccion({ id, children }: { id: SeccionId; children: React.ReactNode }) {
+function Seccion({ id, faltan, children }: { id: SeccionId; faltan: string[]; children: React.ReactNode }) {
   const s = SECCIONES.find((x) => x.id === id)!
   return (
     // scroll-mt: al saltar desde el índice, la sección no queda tapada por el borde superior.
     <section id={`seccion-${id}`} className="scroll-mt-4">
-      <Panel title={s.titulo} icon={s.icono}>
+      <Panel
+        title={s.titulo}
+        icon={s.icono}
+        subtitle={faltan.length ? `Falta: ${faltan.join(', ')}` : undefined}
+        right={
+          faltan.length ? (
+            <span className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800">
+              <Icon icon="solar:danger-circle-bold" width={13} />
+              {faltan.length} por completar
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+              <Icon icon="solar:check-circle-bold" width={13} />
+              Completa
+            </span>
+          )
+        }
+      >
         {children}
       </Panel>
     </section>
   )
 }
+
+/** Campos OBLIGATORIOS de cada sección (los que bloquean "Guardar" si están vacíos). */
+const OBLIGATORIOS: Record<SeccionId, [keyof EmpleadoCreateValues, string][]> = {
+  organizacion: [
+    ['PAIS', 'País'],
+    ['empresa_id', 'Empresa'],
+    ['id_departamento', 'Departamento'],
+    ['id_sub_departamento', 'Sub-departamento'],
+    ['id_puesto', 'Puesto'],
+  ],
+  personales: [
+    ['primer_nombre', 'Primer nombre'],
+    ['primer_apellido', 'Primer apellido'],
+    ['numero_identificacion_nacional', 'Documento de identificación'],
+    ['id_tributario', 'NIT / ID tributario'],
+    ['id_seguro_social', 'No. seguro social'],
+    ['fecha_nacimiento', 'Fecha de nacimiento'],
+    ['sexo', 'Sexo'],
+    ['estado_civil', 'Estado civil'],
+    ['tipo_discapacidad', 'Tipo de discapacidad'],
+  ],
+  culturales: [
+    ['pueblo_pertenencia', 'Pueblo de pertenencia'],
+    ['comunidad_linguistica', 'Comunidad lingüística'],
+  ],
+  contrato: [
+    ['jornada', 'Jornada'],
+    ['temporalidad_contrato', 'Temporalidad'],
+    ['tipo_contrato', 'Tipo de contrato'],
+    ['fecha_contratacion', 'Fecha de ingreso'],
+    ['salario_base_contrato', 'Salario base'],
+    ['forma_pago', 'Forma de pago'],
+  ],
+}
+const vacio = (v: unknown) =>
+  v === undefined || v === null || (typeof v === 'string' && v.trim() === '') || (typeof v === 'number' && Number.isNaN(v))
 
 /** Nombre para el encabezado: partes del nombre o, si faltan (carga masiva), nombre + apellido. */
 function nombreEmpleado(e: EmpleadoBackend) {
@@ -156,6 +211,26 @@ function EditForm({ id, empleado }: { id: string; empleado: EmpleadoBackend }) {
       toast.error(extractApiErrorMessage(err))
     }
   }
+
+  // Empleados de la carga masiva: solo tienen nombre/apellido completos. Se SUGIERE la separación
+  // (como cambio sin guardar, para que el usuario la vea, la revise y la guarde).
+  const nombreSugerido = useMemo(() => {
+    if (!vacio(empleado.primerNombre) || !vacio(empleado.primerApellido)) return null
+    const p = separarNombreCompleto(empleado.nombre, empleado.apellido)
+    return p.primer_nombre ? p : null
+  }, [empleado])
+  useEffect(() => {
+    if (!nombreSugerido) return
+    for (const [k, v] of Object.entries(nombreSugerido))
+      if (v) form.setValue(k as keyof EmpleadoCreateValues, v as never, { shouldDirty: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nombreSugerido])
+
+  const valores = form.watch()
+  const faltanPor = Object.fromEntries(
+    SECCIONES.map((sec) => [sec.id, OBLIGATORIOS[sec.id].filter(([k]) => vacio(valores[k])).map(([, l]) => l)]),
+  ) as Record<SeccionId, string[]>
+  const totalFaltan = Object.values(faltanPor).reduce((a, l) => a + l.length, 0)
 
   const nombre = nombreEmpleado(empleado)
   const puesto = puestoOptions.find((p) => p.id === empleado.idPuesto)?.nombre
@@ -221,6 +296,14 @@ function EditForm({ id, empleado }: { id: string; empleado: EmpleadoBackend }) {
             >
               <Icon icon={sec.icono} width={13} />
               {sec.titulo}
+              {faltanPor[sec.id].length > 0 && (
+                <span
+                  className="ml-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold text-white"
+                  title={`Falta: ${faltanPor[sec.id].join(', ')}`}
+                >
+                  {faltanPor[sec.id].length}
+                </span>
+              )}
             </button>
           ))}
           <span className="ml-auto text-xs text-slate-500">
@@ -229,9 +312,39 @@ function EditForm({ id, empleado }: { id: string; empleado: EmpleadoBackend }) {
         </div>
       </div>
 
+      {totalFaltan > 0 && (
+        <Alert variant="warning" data-testid="rh-empleado-editar__incompleta">
+          <Icon icon="solar:clipboard-remove-bold" width={18} />
+          <AlertTitle>
+            Ficha incompleta: faltan {totalFaltan} dato{totalFaltan === 1 ? '' : 's'} obligatorio
+            {totalFaltan === 1 ? '' : 's'}
+          </AlertTitle>
+          <AlertDescription>
+            <p>
+              Este empleado se cargó con datos parciales (por ejemplo, desde la carga masiva). Para poder{' '}
+              <strong>guardar cualquier cambio</strong> hay que completar estos datos:
+            </p>
+            <ul className="mt-1.5 space-y-1">
+              {SECCIONES.filter((sec) => faltanPor[sec.id].length > 0).map((sec) => (
+                <li key={sec.id} className="flex flex-wrap items-baseline gap-x-1.5">
+                  <button
+                    type="button"
+                    onClick={() => irA(sec.id)}
+                    className="font-semibold text-amber-900 underline-offset-2 hover:underline"
+                  >
+                    {sec.titulo} →
+                  </button>
+                  <span>{faltanPor[sec.id].join(', ')}</span>
+                </li>
+              ))}
+            </ul>
+          </AlertDescription>
+        </Alert>
+      )}
+
       <FormProvider {...form}>
         <form onSubmit={form.handleSubmit(onSubmit, () => toast.error('Revise los campos marcados en rojo'))} className="space-y-5">
-          <Seccion id="organizacion">
+          <Seccion id="organizacion" faltan={faltanPor.organizacion}>
             <div className="grid gap-4 sm:grid-cols-2">
               <StepContent index={0} />
               <StepContent index={1} />
@@ -240,13 +353,27 @@ function EditForm({ id, empleado }: { id: string; empleado: EmpleadoBackend }) {
               <StepContent index={4} />
             </div>
           </Seccion>
-          <Seccion id="personales">
+          <Seccion id="personales" faltan={faltanPor.personales}>
+            {nombreSugerido && (
+              <Alert variant="info" className="mb-4">
+                <Icon icon="solar:magic-stick-3-bold" width={18} />
+                <AlertTitle>Nombre separado automáticamente: revíselo</AlertTitle>
+                <AlertDescription>
+                  En el sistema solo estaba el nombre completo (
+                  <strong>
+                    {empleado.nombre} / {empleado.apellido}
+                  </strong>
+                  ). Se repartió en primer y segundo nombre y apellidos. Corríjalo si no es correcto; se guarda junto con
+                  los demás cambios.
+                </AlertDescription>
+              </Alert>
+            )}
             <StepContent index={5} />
           </Seccion>
-          <Seccion id="culturales">
+          <Seccion id="culturales" faltan={faltanPor.culturales}>
             <StepContent index={6} />
           </Seccion>
-          <Seccion id="contrato">
+          <Seccion id="contrato" faltan={faltanPor.contrato}>
             <StepContent index={7} />
           </Seccion>
 
@@ -262,6 +389,11 @@ function EditForm({ id, empleado }: { id: string; empleado: EmpleadoBackend }) {
                 </div>
               ) : (
                 <div className="text-slate-400">Sin cambios</div>
+              )}
+              {totalFaltan > 0 && (
+                <div className="font-medium text-rose-600">
+                  Faltan {totalFaltan} dato{totalFaltan === 1 ? '' : 's'} obligatorio{totalFaltan === 1 ? '' : 's'} para poder guardar
+                </div>
               )}
             </div>
             <Button type="button" variant="outline" onClick={volver} disabled={mut.isPending}>
