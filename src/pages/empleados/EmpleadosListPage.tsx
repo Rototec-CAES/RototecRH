@@ -31,6 +31,7 @@ import { notify } from '@/lib/notify'
 import { cn, formatDate, formatQ, nombreParaMostrar } from '@/lib/utils'
 import { useEmpleadosBackendList, useHuellasBiotime } from '@/hooks/useEmpleados'
 import { useElementWidth } from '@/hooks/useElementWidth'
+import { NameCombobox } from '@/components/ui/name-combobox'
 import {
   AYUDA_ESTADO_BIO,
   ETIQUETA_ESTADO_BIO,
@@ -84,7 +85,8 @@ export default function EmpleadosListPage() {
   const { options: puestoOptions } = usePuestoOptions()
   const [filtroTexto, setFiltroTexto] = useState('')
   const [filtroEstado, setFiltroEstado] = useState<EstadoFilter>('TODOS')
-  const [filtroPuesto, setFiltroPuesto] = useState('TODOS')
+  /** Opción del filtro de puesto (agrupada por nombre); null = todos. */
+  const [filtroPuesto, setFiltroPuesto] = useState<number | null>(null)
   const [filtroBio, setFiltroBio] = useState<BioFilter>('TODOS')
   const [registrarBio, setRegistrarBio] = useState<EmpleadoParaBiometrico | null>(null)
   const [ayudaBio, setAyudaBio] = useState(false)
@@ -97,12 +99,40 @@ export default function EmpleadosListPage() {
   const puestoNombre = (id?: number | null) =>
     id == null ? '—' : (puestoOptions.find((p) => p.id === id)?.nombre ?? String(id))
 
+  /**
+   * Opciones del filtro de puesto AGRUPADAS POR NOMBRE: en tPuestos hay nombres repetidos en distintos
+   * sub-departamentos (p. ej. AUXILIAR DE BODEGA ×3). Filtrar por un solo id dejaba fuera a los demás.
+   * Cada opción lleva cuántos empleados tiene (según los demás filtros de estado) y los ids que agrupa.
+   */
+  const puestosFiltro = useMemo(() => {
+    const norm = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, ' ').trim()
+    const conteo = new Map<number, number>()
+    for (const e of data ?? []) {
+      if (e.idPuesto == null) continue
+      if (filtroEstado === 'ACTIVO' && !e.estaActivo) continue
+      if (filtroEstado === 'BAJA' && e.estaActivo) continue
+      conteo.set(e.idPuesto, (conteo.get(e.idPuesto) ?? 0) + 1)
+    }
+    const grupos = new Map<string, { nombre: string; ids: Set<number>; n: number }>()
+    for (const p of puestoOptions) {
+      const k = norm(p.nombre)
+      const g = grupos.get(k) ?? { nombre: p.nombre.trim(), ids: new Set<number>(), n: 0 }
+      g.ids.add(p.id)
+      g.n += conteo.get(p.id) ?? 0
+      grupos.set(k, g)
+    }
+    return [...grupos.values()]
+      .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+      .map((g, i) => ({ id: i + 1, nombre: `${g.nombre} · ${g.n}`, base: g.nombre, ids: g.ids, n: g.n }))
+  }, [puestoOptions, data, filtroEstado])
+  const puestoElegido = filtroPuesto != null ? puestosFiltro.find((p) => p.id === filtroPuesto) : undefined
+
   const filtered = useMemo(() => {
     const t = filtroTexto.trim().toLowerCase()
     return (data ?? []).filter((e) => {
       if (filtroEstado === 'ACTIVO' && !e.estaActivo) return false
       if (filtroEstado === 'BAJA' && e.estaActivo) return false
-      if (filtroPuesto !== 'TODOS' && String(e.idPuesto ?? '') !== filtroPuesto) return false
+      if (puestoElegido && (e.idPuesto == null || !puestoElegido.ids.has(e.idPuesto))) return false
       if (filtroBio !== 'TODOS' && bioDe(e).estado !== filtroBio) return false
       if (!t) return true
       const full = displayName(e).toLowerCase()
@@ -111,7 +141,7 @@ export default function EmpleadosListPage() {
       return full.includes(t) || dpi.includes(t) || bio === t
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, filtroTexto, filtroEstado, filtroPuesto, filtroBio, huellasPorCodigo])
+  }, [data, filtroTexto, filtroEstado, puestoElegido, filtroBio, huellasPorCodigo])
 
   /** Conteo por estado biométrico de los empleados ACTIVOS (para el resumen sobre la tabla). */
   const resumenBio = useMemo(() => {
@@ -136,7 +166,7 @@ export default function EmpleadosListPage() {
     setFiltroEstado(v as EstadoFilter)
     setPage(1)
   }
-  function onChangePuesto(v: string) {
+  function onChangePuesto(v: number | null) {
     setFiltroPuesto(v)
     setPage(1)
   }
@@ -179,8 +209,8 @@ export default function EmpleadosListPage() {
       const bioTxt =
         filtroBio !== 'TODOS' ? `-${ETIQUETA_ESTADO_BIO[filtroBio].toLowerCase().replace(/\s+/g, '-')}` : ''
       const puestoTxt =
-        filtroPuesto !== 'TODOS'
-          ? `-${puestoNombre(Number(filtroPuesto)).toLowerCase().replace(/\s+/g, '-')}`
+        puestoElegido
+          ? `-${puestoElegido.base.toLowerCase().replace(/\s+/g, '-')}`
           : ''
       await exportarExcel(`empleados-${estadoTxt}${bioTxt}${puestoTxt}-${stamp()}.xlsx`, [
         {
@@ -310,21 +340,21 @@ export default function EmpleadosListPage() {
               </SelectContent>
             </Select>
           </div>
-          <div className="w-full sm:w-64">
+          <div className="w-full sm:w-72">
             <FieldLabel>Puesto</FieldLabel>
-            <Select value={filtroPuesto} onValueChange={onChangePuesto}>
-              <SelectTrigger className="rounded-xl" data-testid={`${TID}__filtro-puesto`}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="TODOS">Todos los puestos</SelectItem>
-                {puestoOptions.map((p) => (
-                  <SelectItem key={p.id} value={String(p.id)}>
-                    {p.nombre}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div data-testid={`${TID}__filtro-puesto`}>
+              <NameCombobox
+                options={puestosFiltro}
+                value={filtroPuesto}
+                onChange={onChangePuesto}
+                allowAll
+                allLabel="Todos los puestos"
+                placeholder="Todos los puestos"
+                searchPlaceholder="Buscar puesto…"
+                emptyLabel="Ningún puesto coincide"
+                className="[&>button]:rounded-xl"
+              />
+            </div>
           </div>
           <div className="w-full sm:w-52">
             <FieldLabel>Biométrico</FieldLabel>
