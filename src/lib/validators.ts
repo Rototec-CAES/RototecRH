@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { documentoIdentidad } from './documentosPais'
 import {
   BANCOS_GUATEMALA,
   SALARIO_BASE_MINIMO_VALIDACION,
@@ -370,14 +371,16 @@ export const empleadoCreateSchema = z
     habilitar_horas_extra: z.boolean().default(false),
   })
   .superRefine((data, ctx) => {
-    // Formato estricto de documentos solo para Guatemala (otros países: solo requerido).
+    // Documento de identificación: formato según el país (países sin regla: solo requerido).
+    const docIdentidad = documentoIdentidad(data.PAIS)
+    if (docIdentidad && data.numero_identificacion_nacional && !docIdentidad.regex.test(data.numero_identificacion_nacional))
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['numero_identificacion_nacional'],
+        message: docIdentidad.mensaje,
+      })
+    // NIT con formato estricto solo para Guatemala.
     if (data.PAIS === 'GT') {
-      if (!dpiRegex.test(data.numero_identificacion_nacional))
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['numero_identificacion_nacional'],
-          message: 'El DPI debe tener exactamente 13 dígitos',
-        })
       if (!nitRegex.test(data.id_tributario))
         ctx.addIssue({
           code: z.ZodIssueCode.custom,

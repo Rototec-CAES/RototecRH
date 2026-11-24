@@ -21,7 +21,8 @@ import {
 } from '@/hooks/useCompanyCatalogos'
 import { useBiotimeDepartamentos, useBiotimeUbicaciones } from '@/hooks/useBiotime'
 import type { EmpleadoCreateValues } from '@/lib/validators'
-import { CheckboxField, SelectField, TextField, type Opt } from './fields'
+import { CheckboxField, DocumentoIdentidadField, SelectField, TextField, type Opt } from './fields'
+import { documentoIdentidad } from '@/lib/documentosPais'
 
 export const WIZARD_STEPS = [
   { id: 'pais', title: 'País' },
@@ -95,6 +96,7 @@ export function StepContent({ index }: { index: number }) {
   const bioUbic = useBiotimeUbicaciones()
 
   const docs = DOCUMENTOS_POR_PAIS[paisKey ?? ''] ?? DOCUMENTO_DEFAULT
+  const docIdentidad = documentoIdentidad(paisKey)
 
   switch (index) {
     case 0:
@@ -160,13 +162,17 @@ export function StepContent({ index }: { index: number }) {
           <TextField name="primer_apellido" label="Primer apellido" required />
           <TextField name="segundo_apellido" label="Segundo apellido" />
           <TextField name="apellido_casada" label="Apellido de casada" />
-          <TextField
-            name="numero_identificacion_nacional"
-            label={docs.identificacion}
-            required
-            placeholder={paisKey === 'GT' ? '13 dígitos' : undefined}
-            sanitize={paisKey === 'GT' ? (v) => v.replace(/[\s-]/g, '') : undefined}
-          />
+          {docIdentidad ? (
+            <DocumentoIdentidadField
+              key={paisKey}
+              name="numero_identificacion_nacional"
+              label={docIdentidad.etiqueta}
+              required
+              doc={docIdentidad}
+            />
+          ) : (
+            <TextField name="numero_identificacion_nacional" label={docs.identificacion} required />
+          )}
           <TextField name="id_tributario" label={docs.tributario} required />
           <TextField name="id_seguro_social" label={docs.seguroSocial} required />
           <TextField name="fecha_nacimiento" label="Fecha de nacimiento" required type="date" />

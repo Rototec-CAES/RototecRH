@@ -1,5 +1,5 @@
-import { type ReactNode } from 'react'
-import { useFormContext } from 'react-hook-form'
+import { type ReactNode, useEffect, useLayoutEffect, useRef } from 'react'
+import { useController, useFormContext } from 'react-hook-form'
 import { Icon } from '@iconify/react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import type { EmpleadoCreateValues } from '@/lib/validators'
+import { type DocumentoIdentidad, formatearDocumento, limpiarDocumento } from '@/lib/documentosPais'
 
 export type Opt = { value: string; label: string }
 type Name = keyof EmpleadoCreateValues
@@ -52,7 +53,6 @@ export function TextField({
   placeholder,
   disabled,
   step,
-  sanitize,
 }: {
   name: Name
   label: string
@@ -62,15 +62,12 @@ export function TextField({
   disabled?: boolean
   /** Solo para type="number". Sin esto el navegador usa step=1 y rechaza decimales. */
   step?: string
-  /** Limpia el texto mientras se escribe o pega (p. ej. quitar espacios del DPI). */
-  sanitize?: (value: string) => string
 }) {
   const {
     register,
     formState: { errors },
   } = useFormContext<EmpleadoCreateValues>()
   const err = errors[name]?.message as string | undefined
-  const field = register(name, type === 'number' ? { valueAsNumber: true } : {})
   return (
     <FieldShell label={label} required={required} error={err}>
       <Input
@@ -80,12 +77,92 @@ export function TextField({
         disabled={disabled}
         aria-invalid={!!err}
         className={cn(err && 'border-red-400 bg-red-50/40 focus-visible:ring-red-500')}
-        {...field}
+        {...register(name, type === 'number' ? { valueAsNumber: true } : {})}
+      />
+    </FieldShell>
+  )
+}
+
+/**
+ * Documento de identificación con máscara según el país (DPI ####-#####-####, DUI ########-#, …).
+ * Muestra los guiones mientras se escribe, pero en el formulario (y en la BD) guarda el valor limpio.
+ * Acepta pegar el número con o sin guiones, espacios o puntos. Sin `doc` (país sin regla) es texto libre.
+ */
+export function DocumentoIdentidadField({
+  name,
+  label,
+  required,
+  doc,
+}: {
+  name: Name
+  label: string
+  required?: boolean
+  doc: DocumentoIdentidad
+}) {
+  const { control, setValue } = useFormContext<EmpleadoCreateValues>()
+  const { field, fieldState } = useController({ name, control })
+  const inputRef = useRef<HTMLInputElement | null>(null)
+  const caretSignificativos = useRef<number | null>(null)
+
+  const raw = String(field.value ?? '')
+  const limpio = limpiarDocumento(doc, raw)
+  const mostrado = formatearDocumento(doc, limpio)
+  // Carácter que cuenta (no es guion ni separador).
+  const esSignificativo = (c: string) => limpiarDocumento(doc, c) !== ''
+
+  // Valores viejos guardados con espacios/guiones/minúsculas: se limpian sin marcar el formulario como modificado.
+  useEffect(() => {
+    if (raw !== limpio) setValue(name, limpio as never, { shouldDirty: false, shouldValidate: fieldState.isTouched })
+  }, [raw, limpio, name, setValue, fieldState.isTouched])
+
+  // Mantiene el cursor en su lugar aunque se agreguen o quiten guiones.
+  useLayoutEffect(() => {
+    const n = caretSignificativos.current
+    const el = inputRef.current
+    if (n === null || !el) return
+    caretSignificativos.current = null
+    let pos = 0
+    for (let vistos = 0; pos < mostrado.length && vistos < n; pos++) if (esSignificativo(mostrado[pos])) vistos++
+    el.setSelectionRange(pos, pos)
+  })
+
+  const err = fieldState.error?.message
+  return (
+    <FieldShell label={label} required={required} error={err}>
+      <Input
+        ref={(el) => {
+          inputRef.current = el
+          field.ref(el)
+        }}
+        name={field.name}
+        value={mostrado}
+        onBlur={field.onBlur}
+        inputMode={doc.tipo === 'digitos' ? 'numeric' : 'text'}
+        autoCapitalize={doc.tipo === 'alfanumerico' ? 'characters' : undefined}
+        autoComplete="off"
+        spellCheck={false}
+        placeholder={doc.placeholder}
+        aria-invalid={!!err}
+        className={cn('tabular-nums', err && 'border-red-400 bg-red-50/40 focus-visible:ring-red-500')}
         onChange={(e) => {
-          if (sanitize) e.target.value = sanitize(e.target.value)
-          return field.onChange(e)
+          const texto = e.target.value
+          const cursor = e.target.selectionStart ?? texto.length
+          let antes = limpiarDocumento(doc, texto.slice(0, cursor)).length
+          let nuevo = limpiarDocumento(doc, texto)
+          // Borrar un guion no cambia el valor: se borra el carácter anterior, como se espera.
+          if (nuevo === limpio && texto.length < mostrado.length && antes > 0) {
+            nuevo = nuevo.slice(0, antes - 1) + nuevo.slice(antes)
+            antes -= 1
+          }
+          nuevo = nuevo.slice(0, doc.longitud)
+          caretSignificativos.current = Math.min(antes, nuevo.length)
+          field.onChange(nuevo)
         }}
       />
+      <p className="text-[11px] text-slate-400">
+        {doc.longitud} {doc.tipo === 'digitos' ? 'dígitos' : 'caracteres'}
+        {doc.grupos ? ' · los guiones se agregan solos' : ''}
+      </p>
     </FieldShell>
   )
 }
