@@ -36,12 +36,42 @@ export function infoBiometrico(
 }
 
 export const ETIQUETA_ESTADO_BIO: Record<EstadoBiometrico, string> = {
-  SIN_BIOMETRICO: 'Sin biométrico',
-  NO_EN_BIOTIME: 'No existe en BioTime',
-  FALTA_HUELLA: 'Falta huella',
+  SIN_BIOMETRICO: 'Sin registrar en BioTime',
+  NO_EN_BIOTIME: 'Código no existe en BioTime',
+  FALTA_HUELLA: 'Falta huella en el reloj',
   CON_HUELLA: 'Con huella',
   NO_APLICA: '',
   SIN_DATO: '',
+}
+
+/**
+ * Qué significa cada estado, qué falta y quién lo resuelve. Se muestra en la ayuda del listado.
+ * El proceso siempre es: 1) registrar en BioTime (RRHH, en este sistema) → 2) huella (encargado, en el reloj).
+ */
+export const AYUDA_ESTADO_BIO: Record<
+  'SIN_BIOMETRICO' | 'FALTA_HUELLA' | 'CON_HUELLA' | 'NO_EN_BIOTIME',
+  { paso: string; significa: string; quien: string }
+> = {
+  SIN_BIOMETRICO: {
+    paso: 'Paso 1 pendiente',
+    significa: 'El empleado no existe en BioTime y no tiene código. En el reloj no aparece.',
+    quien: 'RRHH, en este sistema: botón de huella de la fila o “Registrar pendientes”.',
+  },
+  FALTA_HUELLA: {
+    paso: 'Paso 2 pendiente',
+    significa: 'Ya está en BioTime y tiene código, pero todavía no se le registró ninguna huella.',
+    quien: 'Encargado del reloj: M/OK → Usuarios → buscar el código → Editar → Huella.',
+  },
+  CON_HUELLA: {
+    paso: 'Completo',
+    significa: 'Tiene código y al menos una huella. Ya puede marcar.',
+    quien: 'Nadie. Se recomiendan 2 dedos (índice derecho e izquierdo).',
+  },
+  NO_EN_BIOTIME: {
+    paso: 'Revisar',
+    significa: 'En RRHH tiene un código, pero ese código no existe (o fue eliminado) en BioTime.',
+    quien: 'TI: revisar en la web de BioTime.',
+  },
 }
 
 /** 'AAAA-MM-DDTHH:mm:ss' (hora local del servidor) → 'DD/MM/AAAA HH:mm', sin pasar por Date (no se corre la zona). */

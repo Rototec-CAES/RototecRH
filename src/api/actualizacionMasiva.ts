@@ -42,6 +42,13 @@ export const actualizacionMasivaApi = {
     const { data } = await api.post<{ id: number; codigoEmpleadoBio: number }>(`/empleados/${id}/biometrico`, body)
     return data
   },
+  /** Vincula a un empleado con un registro que YA existe en BioTime (no crea otro allá). */
+  async vincularBiometrico(id: number, codigoBio: number): Promise<{ id: number; codigoEmpleadoBio: number }> {
+    const { data } = await api.post<{ id: number; codigoEmpleadoBio: number }>(`/empleados/${id}/vincular-biometrico`, {
+      codigo_bio: codigoBio,
+    })
+    return data
+  },
   /** Re-valida y aplica todo en una sola transacción (400 si hay cualquier error). */
   async aplicar(filas: FilaActualizacionMasiva[]): Promise<ResultadoAplicarMasiva> {
     const { data } = await api.post<ResultadoAplicarMasiva>('/empleados/actualizacion-masiva/aplicar', { filas })

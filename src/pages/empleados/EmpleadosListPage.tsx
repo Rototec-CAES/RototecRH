@@ -30,6 +30,7 @@ import { notify } from '@/lib/notify'
 import { cn, formatDate, formatQ, nombreParaMostrar } from '@/lib/utils'
 import { useEmpleadosBackendList, useHuellasBiotime } from '@/hooks/useEmpleados'
 import {
+  AYUDA_ESTADO_BIO,
   ETIQUETA_ESTADO_BIO,
   formatFechaHuella,
   infoBiometrico,
@@ -84,6 +85,7 @@ export default function EmpleadosListPage() {
   const [filtroPuesto, setFiltroPuesto] = useState('TODOS')
   const [filtroBio, setFiltroBio] = useState<BioFilter>('TODOS')
   const [registrarBio, setRegistrarBio] = useState<EmpleadoParaBiometrico | null>(null)
+  const [ayudaBio, setAyudaBio] = useState(false)
   const [page, setPage] = useState(1)
   const [exportando, setExportando] = useState(false)
 
@@ -287,10 +289,10 @@ export default function EmpleadosListPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="TODOS">Todos</SelectItem>
-                <SelectItem value="CON_HUELLA">Con huella</SelectItem>
-                <SelectItem value="FALTA_HUELLA">Falta huella</SelectItem>
-                <SelectItem value="SIN_BIOMETRICO">Sin biométrico</SelectItem>
-                <SelectItem value="NO_EN_BIOTIME">No existe en BioTime</SelectItem>
+                <SelectItem value="SIN_BIOMETRICO">1 · Sin registrar en BioTime</SelectItem>
+                <SelectItem value="FALTA_HUELLA">2 · Falta huella en el reloj</SelectItem>
+                <SelectItem value="CON_HUELLA">✓ Con huella</SelectItem>
+                <SelectItem value="NO_EN_BIOTIME">⚠ Código no existe en BioTime</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -306,71 +308,97 @@ export default function EmpleadosListPage() {
 
       {hayPendientesBio && (
         <div
-          className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+          className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm"
           data-testid={`${TID}__resumen-biometrico`}
         >
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <Icon icon="solar:fingerprint-bold" width={18} className="text-slate-500" />
-              <h2 className="text-sm font-semibold text-slate-800">Control biométrico · empleados activos</h2>
-            </div>
-            <span className="text-xs text-slate-500">Haga clic en un recuadro para filtrar la tabla</span>
-          </div>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-            <TarjetaBio
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="mr-1 flex items-center gap-1.5 text-xs font-semibold text-slate-600">
+              <Icon icon="solar:fingerprint-bold" width={15} className="text-slate-400" />
+              Biométrico (activos)
+            </span>
+            <PasoBio
               tono="ambar"
-              icon="solar:user-cross-bold"
               n={resumenBio.SIN_BIOMETRICO}
-              titulo="Sin biométrico"
-              detalle="No están en BioTime. Registrarlos primero."
+              paso="1"
+              titulo={ETIQUETA_ESTADO_BIO.SIN_BIOMETRICO}
+              ayuda={AYUDA_ESTADO_BIO.SIN_BIOMETRICO}
               activa={filtroBio === 'SIN_BIOMETRICO'}
               onClick={() => verEstadoBio('SIN_BIOMETRICO')}
-              accion={
-                resumenBio.SIN_BIOMETRICO > 0 && (
-                  <button
-                    type="button"
-                    className="text-xs font-semibold text-amber-800 underline-offset-2 hover:underline"
-                    onClick={(ev) => {
-                      ev.stopPropagation()
-                      navigate('/empleados/biometrico')
-                    }}
-                    data-testid={`${TID}__btn-pendientes-biometrico`}
-                  >
-                    Registrar pendientes →
-                  </button>
-                )
-              }
             />
-            <TarjetaBio
-              tono="rojo"
-              icon="solar:danger-triangle-bold"
-              n={resumenBio.NO_EN_BIOTIME}
-              titulo="No existe en BioTime"
-              detalle="Tienen código en RRHH, pero BioTime no lo tiene. Revisar con TI."
-              activa={filtroBio === 'NO_EN_BIOTIME'}
-              onClick={() => verEstadoBio('NO_EN_BIOTIME')}
-            />
-            <TarjetaBio
+            <Icon icon="solar:alt-arrow-right-linear" width={14} className="hidden text-slate-300 sm:block" />
+            <PasoBio
               tono="azul"
-              icon="solar:clock-circle-bold"
               n={resumenBio.FALTA_HUELLA}
-              titulo="Falta huella"
-              detalle="Están en BioTime; falta enrolar la huella en el reloj."
+              paso="2"
+              titulo={ETIQUETA_ESTADO_BIO.FALTA_HUELLA}
+              ayuda={AYUDA_ESTADO_BIO.FALTA_HUELLA}
               activa={filtroBio === 'FALTA_HUELLA'}
               onClick={() => verEstadoBio('FALTA_HUELLA')}
             />
-            <TarjetaBio
+            <Icon icon="solar:alt-arrow-right-linear" width={14} className="hidden text-slate-300 sm:block" />
+            <PasoBio
               tono="verde"
-              icon="solar:check-circle-bold"
               n={resumenBio.CON_HUELLA}
-              titulo="Con huella"
-              detalle="Listos para marcar."
+              paso="✓"
+              titulo={ETIQUETA_ESTADO_BIO.CON_HUELLA}
+              ayuda={AYUDA_ESTADO_BIO.CON_HUELLA}
               activa={filtroBio === 'CON_HUELLA'}
               onClick={() => verEstadoBio('CON_HUELLA')}
             />
+            {resumenBio.NO_EN_BIOTIME > 0 && (
+              <PasoBio
+                tono="rojo"
+                n={resumenBio.NO_EN_BIOTIME}
+                paso="⚠"
+                titulo={ETIQUETA_ESTADO_BIO.NO_EN_BIOTIME}
+                ayuda={AYUDA_ESTADO_BIO.NO_EN_BIOTIME}
+                activa={filtroBio === 'NO_EN_BIOTIME'}
+                onClick={() => verEstadoBio('NO_EN_BIOTIME')}
+              />
+            )}
+            <div className="ml-auto flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs text-slate-500"
+                onClick={() => setAyudaBio((v) => !v)}
+                aria-expanded={ayudaBio}
+              >
+                <Icon icon="solar:question-circle-linear" width={14} />
+                ¿Qué significa?
+              </Button>
+              {resumenBio.SIN_BIOMETRICO > 0 && (
+                <Button
+                  size="sm"
+                  className="h-7 bg-amber-600 px-2.5 text-xs text-white hover:bg-amber-700"
+                  onClick={() => navigate('/empleados/biometrico')}
+                  data-testid={`${TID}__btn-pendientes-biometrico`}
+                >
+                  <Icon icon="solar:fingerprint-bold" width={14} />
+                  Registrar pendientes
+                </Button>
+              )}
+            </div>
           </div>
+
+          {ayudaBio && (
+            <div className="mt-2.5 grid gap-2 border-t border-dashed border-slate-200 pt-2.5 text-xs sm:grid-cols-2 lg:grid-cols-4">
+              {(['SIN_BIOMETRICO', 'FALTA_HUELLA', 'CON_HUELLA', 'NO_EN_BIOTIME'] as const).map((k) => (
+                <div key={k} className="space-y-0.5">
+                  <div className="font-semibold text-slate-700">
+                    {AYUDA_ESTADO_BIO[k].paso} · {ETIQUETA_ESTADO_BIO[k]}
+                  </div>
+                  <p className="text-slate-500">{AYUDA_ESTADO_BIO[k].significa}</p>
+                  <p className="text-slate-500">
+                    <span className="font-medium text-slate-600">Quién lo resuelve:</span> {AYUDA_ESTADO_BIO[k].quien}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+
           {huellasQ.isError && (
-            <p className="mt-2 text-xs text-rose-600">
+            <p className="mt-1.5 text-xs text-rose-600">
               No se pudo consultar BioTime; los estados de huella no están disponibles por ahora.
             </p>
           )}
@@ -488,59 +516,50 @@ export default function EmpleadosListPage() {
   )
 }
 
-const TONO_TARJETA = {
-  ambar: { caja: 'border-amber-200 bg-amber-50/60', activa: 'ring-2 ring-amber-400', num: 'text-amber-700', icon: 'text-amber-600' },
-  rojo: { caja: 'border-rose-200 bg-rose-50/60', activa: 'ring-2 ring-rose-400', num: 'text-rose-700', icon: 'text-rose-600' },
-  azul: { caja: 'border-sky-200 bg-sky-50/60', activa: 'ring-2 ring-sky-400', num: 'text-sky-700', icon: 'text-sky-600' },
-  verde: { caja: 'border-emerald-200 bg-emerald-50/60', activa: 'ring-2 ring-emerald-400', num: 'text-emerald-700', icon: 'text-emerald-600' },
+const TONO_PASO = {
+  ambar: { base: 'border-amber-200 bg-amber-50 text-amber-900', activa: 'ring-2 ring-amber-400', num: 'bg-amber-500' },
+  azul: { base: 'border-sky-200 bg-sky-50 text-sky-900', activa: 'ring-2 ring-sky-400', num: 'bg-sky-500' },
+  verde: { base: 'border-emerald-200 bg-emerald-50 text-emerald-900', activa: 'ring-2 ring-emerald-400', num: 'bg-emerald-500' },
+  rojo: { base: 'border-rose-200 bg-rose-50 text-rose-900', activa: 'ring-2 ring-rose-400', num: 'bg-rose-500' },
 }
 
-function TarjetaBio({
+/** Botón compacto del resumen biométrico: [paso] etiqueta · cantidad. Clic = filtrar la tabla. */
+function PasoBio({
   tono,
-  icon,
   n,
+  paso,
   titulo,
-  detalle,
+  ayuda,
   activa,
   onClick,
-  accion,
 }: {
-  tono: keyof typeof TONO_TARJETA
-  icon: string
+  tono: keyof typeof TONO_PASO
   n: number
+  paso: string
   titulo: string
-  detalle: string
+  ayuda: { significa: string; quien: string }
   activa: boolean
   onClick: () => void
-  accion?: React.ReactNode
 }) {
-  const t = TONO_TARJETA[tono]
+  const t = TONO_PASO[tono]
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      aria-pressed={activa}
+    <button
+      type="button"
       onClick={onClick}
-      onKeyDown={(ev) => {
-        if (ev.key === 'Enter' || ev.key === ' ') {
-          ev.preventDefault()
-          onClick()
-        }
-      }}
+      aria-pressed={activa}
+      title={`${ayuda.significa}\nQuién lo resuelve: ${ayuda.quien}\n(Clic para filtrar la tabla)`}
       className={cn(
-        'cursor-pointer rounded-xl border p-3 text-left transition hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400',
-        t.caja,
+        'inline-flex h-8 items-center gap-1.5 rounded-lg border pl-1 pr-2.5 text-xs font-medium transition hover:brightness-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400',
+        t.base,
         activa && t.activa,
-        n === 0 && 'opacity-60',
+        n === 0 && 'opacity-50',
       )}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="text-xs font-semibold text-slate-700">{titulo}</div>
-        <Icon icon={icon} width={16} className={t.icon} />
-      </div>
-      <div className={cn('mt-1 text-2xl font-bold tabular-nums', t.num)}>{n}</div>
-      <p className="mt-0.5 text-[11px] leading-snug text-slate-500">{detalle}</p>
-      {accion && <div className="mt-1.5">{accion}</div>}
-    </div>
+      <span className={cn('flex h-5 min-w-5 items-center justify-center rounded-md px-1 text-[10px] font-bold text-white', t.num)}>
+        {paso}
+      </span>
+      {titulo}
+      <span className="font-bold tabular-nums">{n}</span>
+    </button>
   )
 }

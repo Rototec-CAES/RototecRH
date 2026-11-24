@@ -1136,6 +1136,10 @@ export interface EmpleadoSinBiometrico {
   puesto: string | null
   departamento: string | null
   fechaContratacion: string | null
+  /** Código de un registro que YA existe en BioTime con el mismo nombre y sin dueño en RRHH (posible duplicado). */
+  posibleCodigoBio: number | null
+  /** Nombre de ese registro en BioTime. */
+  posibleNombreBio: string | null
 }
 
 /** Departamentos y puestos nuevos del Excel que se crean antes de validar. */

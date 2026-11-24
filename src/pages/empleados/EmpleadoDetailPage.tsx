@@ -208,7 +208,7 @@ export default function EmpleadoDetailPage() {
             ) : (
               data.estaActivo && (
                 <DetailChip icon="solar:fingerprint-bold" className="border-amber-400/40 text-amber-300">
-                  Sin biométrico
+                  Sin registrar en BioTime
                 </DetailChip>
               )
             )}
@@ -220,7 +220,7 @@ export default function EmpleadoDetailPage() {
             )}
             {bio.estado === 'FALTA_HUELLA' && (
               <DetailChip icon="solar:clock-circle-bold" className="border-sky-400/40 text-sky-200">
-                Falta registrar huella
+                Falta huella en el reloj
               </DetailChip>
             )}
             {bio.estado === 'NO_EN_BIOTIME' && (
@@ -237,7 +237,7 @@ export default function EmpleadoDetailPage() {
           <Icon icon="solar:fingerprint-bold" width={18} />
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <AlertTitle>No está registrado en el biométrico</AlertTitle>
+              <AlertTitle>Paso 1 pendiente: no está registrado en BioTime</AlertTitle>
               <AlertDescription>
                 Este empleado no está en BioTime, por eso no aparece en el reloj: no se le puede registrar la huella
                 ni puede marcar asistencia. Regístrelo y luego enrole su huella con el código que se le asigne.
@@ -259,7 +259,7 @@ export default function EmpleadoDetailPage() {
       {data.estaActivo && bio.estado === 'FALTA_HUELLA' && (
         <Alert variant="info" data-testid="rh-empleado__aviso-huella">
           <Icon icon="solar:clock-circle-bold" width={18} />
-          <AlertTitle>Falta registrar la huella</AlertTitle>
+          <AlertTitle>Paso 2 pendiente: falta la huella en el reloj</AlertTitle>
           <AlertDescription>
             Ya está en BioTime con el código <strong className="font-mono">{data.codigoEmpleadoBio}</strong>, pero
             todavía no tiene huella, así que no puede marcar. En el reloj: <strong>M/OK → Usuarios</strong> → buscar el

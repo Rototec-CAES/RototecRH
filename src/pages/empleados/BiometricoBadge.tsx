@@ -37,9 +37,9 @@ export function BiometricoBadge({ info, className }: { info: InfoBiometrico; cla
         <Chip
           tono="ambar"
           icon="solar:fingerprint-bold"
-          title="No está en BioTime: no aparece en el reloj, no se le puede registrar la huella ni puede marcar"
+          title="Paso 1 pendiente: no existe en BioTime ni tiene código, así que no aparece en el reloj. Lo registra RRHH desde este sistema."
         >
-          Sin biométrico
+          Sin registrar en BioTime
         </Chip>
       </div>
     )
@@ -55,7 +55,7 @@ export function BiometricoBadge({ info, className }: { info: InfoBiometrico; cla
       {estado === 'CON_HUELLA' &&
         codigoChip('verde', 'Código BioTime: es el número que se busca en el reloj y con el que marca')}
       {estado === 'FALTA_HUELLA' &&
-        codigoChip('azul', 'Código BioTime: búsquelo en el reloj (Usuarios) para registrar la huella')}
+        codigoChip('azul', 'Paso 2 pendiente: ya está en BioTime con este código; falta registrar la huella en el reloj')}
       {estado === 'NO_EN_BIOTIME' &&
         codigoChip(
           'rojo',
@@ -78,13 +78,13 @@ export function BiometricoBadge({ info, className }: { info: InfoBiometrico; cla
       {estado === 'FALTA_HUELLA' && (
         <div className="flex items-center gap-1 text-[11px] font-medium text-sky-700">
           <Icon icon="solar:clock-circle-linear" width={11} />
-          Falta registrar huella
+          Falta huella en el reloj
         </div>
       )}
       {estado === 'NO_EN_BIOTIME' && (
         <div className="flex items-center gap-1 text-[11px] font-medium text-rose-700">
           <Icon icon="solar:danger-triangle-linear" width={11} />
-          {huella?.eliminadoEnBiotime ? 'Eliminado en BioTime' : 'No existe en BioTime'}
+          {huella?.eliminadoEnBiotime ? 'Eliminado en BioTime' : 'Código no existe en BioTime'}
         </div>
       )}
     </div>

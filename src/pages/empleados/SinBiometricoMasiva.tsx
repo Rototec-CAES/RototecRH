@@ -18,7 +18,7 @@ type Alcance = 'CARGA' | 'TODOS'
 
 type Estado =
   | { tipo: 'procesando' }
-  | { tipo: 'ok'; codigo: number }
+  | { tipo: 'ok'; codigo: number; vinculado?: boolean }
   | { tipo: 'error'; mensaje: string }
 
 interface DatosBio {
@@ -37,6 +37,8 @@ export function SinBiometricoMasiva({ idsCreados }: { idsCreados: number[] }) {
     queryKey: ['empleados', 'sin-biometrico'],
     queryFn: () => actualizacionMasivaApi.sinBiometrico(),
     staleTime: 0,
+    // Si se recarga al volver a la pestaña, los recién registrados salen de la lista y se pierde su código.
+    refetchOnWindowFocus: false,
   })
   const bioDeptos = useBiotimeDepartamentos()
   const bioUbic = useBiotimeUbicaciones()
@@ -45,6 +47,7 @@ export function SinBiometricoMasiva({ idsCreados }: { idsCreados: number[] }) {
   const [general, setGeneral] = useState<DatosBio>({ departamento: null, ubicacion: null })
   const [porFila, setPorFila] = useState<Record<number, Partial<DatosBio>>>({})
   const [seleccion, setSeleccion] = useState<Set<number>>(() => new Set(idsCreados))
+  const [vinculando, setVinculando] = useState<number | null>(null)
   const [estados, setEstados] = useState<Record<number, Estado>>({})
   const [registrando, setRegistrando] = useState(false)
 
@@ -64,12 +67,18 @@ export function SinBiometricoMasiva({ idsCreados }: { idsCreados: number[] }) {
   })
   const pendiente = (id: number) => estados[id]?.tipo !== 'ok'
   const seleccionables = filas.filter((e) => pendiente(e.id))
+  /** "Seleccionar todos" deja fuera a los que ya parecen existir en BioTime: se deben vincular, no registrar. */
+  const seleccionablesSinDuplicado = seleccionables.filter((e) => e.posibleCodigoBio == null)
+  const posiblesDuplicados = seleccionables.filter((e) => e.posibleCodigoBio != null)
   const seleccionados = seleccionables.filter((e) => seleccion.has(e.id))
   const faltanDatos = seleccionados.filter((e) => {
     const d = datosDe(e.id)
     return !d.departamento || !d.ubicacion
   })
-  const todos = seleccionables.length > 0 && seleccionados.length === seleccionables.length
+  const todos =
+    seleccionablesSinDuplicado.length > 0 &&
+    seleccionablesSinDuplicado.every((e) => seleccion.has(e.id))
+  const seleccionadosDuplicados = seleccionados.filter((e) => e.posibleCodigoBio != null)
 
   function alternar(id: number, on: boolean) {
     setSeleccion((prev) => {
@@ -112,7 +121,38 @@ export function SinBiometricoMasiva({ idsCreados }: { idsCreados: number[] }) {
     if (fallidos) toast.error(`${fallidos} no se pudieron registrar; revise la columna Estado y reintente`)
   }
 
+  async function vincular(id: number, codigo: number) {
+    setVinculando(id)
+    try {
+      const r = await actualizacionMasivaApi.vincularBiometrico(id, codigo)
+      setEstados((prev) => ({ ...prev, [id]: { tipo: 'ok', codigo: r.codigoEmpleadoBio, vinculado: true } }))
+      alternar(id, false)
+      qc.invalidateQueries({ queryKey: ['empleados', 'backend'] })
+      toast.success(`Vinculado al código BioTime ${r.codigoEmpleadoBio}`)
+    } catch (err) {
+      setEstados((prev) => ({ ...prev, [id]: { tipo: 'error', mensaje: extractApiErrorMessage(err) } }))
+    } finally {
+      setVinculando(null)
+    }
+  }
+
   const registradosOk = filas.filter((e) => estados[e.id]?.tipo === 'ok').length
+
+  /** Copia "ID RRHH, nombre y código BioTime" de los registrados, para pegarlo en Excel o enviarlo. */
+  async function copiarCodigos() {
+    const lineas = filas
+      .filter((e) => estados[e.id]?.tipo === 'ok')
+      .map((e) => {
+        const est = estados[e.id] as { codigo: number }
+        return [e.id, [e.nombre, e.apellido].filter(Boolean).join(' '), est.codigo].join('\t')
+      })
+    try {
+      await navigator.clipboard.writeText(['ID RRHH\tNombre\tCódigo BioTime', ...lineas].join('\n'))
+      toast.success(`${lineas.length} código${lineas.length === 1 ? '' : 's'} copiado${lineas.length === 1 ? '' : 's'}`)
+    } catch {
+      toast.error('No se pudo copiar')
+    }
+  }
 
   return (
     <div className="space-y-3 text-left" data-testid="rh-actualizacion-masiva__sin-biometrico">
@@ -189,6 +229,21 @@ export function SinBiometricoMasiva({ idsCreados }: { idsCreados: number[] }) {
             </p>
           </div>
 
+          {posiblesDuplicados.length > 0 && (
+            <Alert variant="warning">
+              <Icon icon="solar:danger-triangle-bold" width={18} />
+              <AlertTitle>
+                {posiblesDuplicados.length} empleado{posiblesDuplicados.length === 1 ? '' : 's'} parece
+                {posiblesDuplicados.length === 1 ? '' : 'n'} existir ya en BioTime
+              </AlertTitle>
+              <AlertDescription>
+                Hay un registro en BioTime con el mismo nombre que no está asignado a nadie en RRHH (por ejemplo, un alta
+                que falló a medias). Use <strong>Vincular</strong> para asignarle ese código; si lo registra de nuevo,
+                quedará duplicado en el reloj. Por eso no se incluyen en “seleccionar todos”.
+              </AlertDescription>
+            </Alert>
+          )}
+
           <div className="max-h-[55vh] overflow-auto rounded-2xl border border-slate-200 bg-white">
             <Table>
               <TableHeader className="sticky top-0 z-10 bg-slate-50">
@@ -198,13 +253,21 @@ export function SinBiometricoMasiva({ idsCreados }: { idsCreados: number[] }) {
                       checked={todos}
                       disabled={registrando || seleccionables.length === 0}
                       onCheckedChange={(v) =>
-                        setSeleccion(v ? new Set([...seleccion, ...seleccionables.map((e) => e.id)]) : new Set())
+                        setSeleccion(
+                          v ? new Set([...seleccion, ...seleccionablesSinDuplicado.map((e) => e.id)]) : new Set(),
+                        )
                       }
                       aria-label="Seleccionar todos"
                     />
                   </TableHead>
                   <TableHead className="w-16" title="ID interno de RRHH (no es el código del reloj)">ID RRHH</TableHead>
                   <TableHead className="min-w-[200px]">Empleado</TableHead>
+                  <TableHead
+                    className="min-w-[190px]"
+                    title="Código con el que el empleado queda en BioTime: se busca en el reloj y en la web de BioTime (p. ej. para darlo de baja)."
+                  >
+                    Código BioTime
+                  </TableHead>
                   <TableHead className="min-w-[160px]">Puesto / Departamento</TableHead>
                   <TableHead className="min-w-[200px]">Departamento BioTime</TableHead>
                   <TableHead className="min-w-[200px]">Ubicación</TableHead>
@@ -250,6 +313,56 @@ export function SinBiometricoMasiva({ idsCreados }: { idsCreados: number[] }) {
                           {e.fechaContratacion ? ` · Ingreso ${formatDate(e.fechaContratacion)}` : ''}
                         </div>
                       </TableCell>
+                      <TableCell>
+                        {hecho ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-mono text-sm font-bold text-emerald-800">
+                              <Icon icon="solar:fingerprint-linear" width={14} />
+                              {est.codigo}
+                            </span>
+                            <button
+                              type="button"
+                              className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                              title="Copiar código"
+                              onClick={() =>
+                                navigator.clipboard
+                                  .writeText(String(est.codigo))
+                                  .then(() => toast.success(`Código ${est.codigo} copiado`))
+                                  .catch(() => toast.error('No se pudo copiar'))
+                              }
+                            >
+                              <Icon icon="solar:copy-linear" width={14} />
+                            </button>
+                          </div>
+                        ) : e.posibleCodigoBio != null ? (
+                          <div className="space-y-1 rounded-lg border border-amber-300 bg-amber-50 p-2">
+                            <div className="flex items-center gap-1 text-xs font-semibold text-amber-900">
+                              <Icon icon="solar:danger-triangle-bold" width={13} className="text-amber-600" />
+                              Ya existe en BioTime
+                            </div>
+                            <div className="text-xs text-amber-900">
+                              Código <span className="font-mono font-bold">{e.posibleCodigoBio}</span>
+                              {e.posibleNombreBio && <span className="block text-amber-800/80">{e.posibleNombreBio}</span>}
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 w-full border-amber-400 bg-white text-xs text-amber-900 hover:bg-amber-100"
+                              disabled={registrando || vinculando != null}
+                              onClick={() => vincular(e.id, e.posibleCodigoBio!)}
+                              title="Asigna este código existente al empleado, sin crear otro en BioTime"
+                            >
+                              <Icon
+                                icon={vinculando === e.id ? 'svg-spinners:180-ring' : 'solar:link-bold'}
+                                width={13}
+                              />
+                              Vincular {e.posibleCodigoBio}
+                            </Button>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-slate-400">Se asigna al registrar</span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-sm">
                         <div>{e.puesto ?? '—'}</div>
                         <div className="text-xs text-slate-500">{e.departamento ?? '—'}</div>
@@ -276,14 +389,15 @@ export function SinBiometricoMasiva({ idsCreados }: { idsCreados: number[] }) {
                       </TableCell>
                       <TableCell className="text-sm">
                         {!est ? (
-                          <span className="text-amber-700">Sin biométrico</span>
+                          <span className="text-amber-700">Sin registrar en BioTime</span>
                         ) : est.tipo === 'procesando' ? (
                           <span className="flex items-center gap-1.5 text-slate-500">
                             <Icon icon="svg-spinners:180-ring" width={14} /> Registrando…
                           </span>
                         ) : est.tipo === 'ok' ? (
                           <span className="flex items-center gap-1.5 font-medium text-emerald-700">
-                            <Icon icon="solar:check-circle-bold" width={15} /> Código {est.codigo}
+                            <Icon icon={est.vinculado ? 'solar:link-bold' : 'solar:check-circle-bold'} width={15} />
+                            {est.vinculado ? 'Vinculado' : 'Registrado'}
                           </span>
                         ) : (
                           <span className="flex gap-1.5 text-red-700">
@@ -304,7 +418,18 @@ export function SinBiometricoMasiva({ idsCreados }: { idsCreados: number[] }) {
               {seleccionados.length} seleccionado{seleccionados.length === 1 ? '' : 's'}
               {registradosOk > 0 && ` · ${registradosOk} ya registrado${registradosOk === 1 ? '' : 's'}`}
               {faltanDatos.length > 0 && ` · ${faltanDatos.length} sin departamento/ubicación de BioTime`}
+              {seleccionadosDuplicados.length > 0 && (
+                <span className="font-semibold text-amber-700">
+                  {` · ${seleccionadosDuplicados.length} ya existe${seleccionadosDuplicados.length === 1 ? '' : 'n'} en BioTime: se duplicará${seleccionadosDuplicados.length === 1 ? '' : 'n'} (mejor vincular)`}
+                </span>
+              )}
             </span>
+            {registradosOk > 0 && (
+              <Button variant="outline" onClick={copiarCodigos} disabled={registrando}>
+                <Icon icon="solar:copy-linear" />
+                Copiar códigos ({registradosOk})
+              </Button>
+            )}
             <Button
               onClick={registrar}
               disabled={registrando || seleccionados.length === 0 || faltanDatos.length > 0}
