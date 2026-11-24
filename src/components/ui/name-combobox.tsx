@@ -23,6 +23,8 @@ interface NameComboboxProps {
   emptyLabel?: string
   disabled?: boolean
   className?: string
+  /** Muestra los nombres largos completos (en varias líneas) en vez de cortarlos a una línea. */
+  multiline?: boolean
 }
 
 const norm = (s: string) =>
@@ -39,6 +41,7 @@ export function NameCombobox({
   emptyLabel = 'Sin resultados',
   disabled = false,
   className,
+  multiline = false,
 }: NameComboboxProps) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -123,9 +126,11 @@ export function NameCombobox({
         onClick={() => !disabled && setOpen((o) => !o)}
         className={cn(
           'flex h-10 w-full items-center justify-between gap-2 rounded-md border border-input bg-white px-3 py-2 text-sm text-slate-700 transition-colors duration-150 hover:border-slate-300 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:bg-slate-50 disabled:opacity-60',
+          multiline && 'h-auto min-h-10',
         )}
+        title={selected ? selected.nombre : undefined}
       >
-        <span className={cn('line-clamp-1 text-left', isPlaceholder && 'text-slate-400')}>
+        <span className={cn(multiline ? 'break-words text-left' : 'line-clamp-1 text-left', isPlaceholder && 'text-slate-400')}>
           {triggerText}
         </span>
         <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
@@ -173,7 +178,9 @@ export function NameCombobox({
                         <Check className="h-4 w-4 text-sky-500" />
                       </span>
                     )}
-                    <span className="line-clamp-1">{opt.label}</span>
+                    <span className={multiline ? 'break-words' : 'line-clamp-1'} title={opt.label}>
+                      {opt.label}
+                    </span>
                   </button>
                 )
               })

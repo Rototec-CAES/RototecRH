@@ -80,7 +80,7 @@ export function RegistrarBiometricoDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && !enviando && onClose()}>
-      <DialogContent data-testid="rh-empleados__dialog-biometrico">
+      <DialogContent className="max-w-2xl overflow-y-visible" data-testid="rh-empleados__dialog-biometrico">
         {codigo == null ? (
           <>
             <DialogHeader>
@@ -108,6 +108,7 @@ export function RegistrarBiometricoDialog({
                   placeholder={bioDeptos.isLoading ? 'Cargando…' : 'Seleccione el departamento'}
                   searchPlaceholder="Buscar departamento…"
                   disabled={enviando}
+                  multiline
                 />
               </div>
               <div className="space-y-1.5">
@@ -121,6 +122,7 @@ export function RegistrarBiometricoDialog({
                   placeholder={bioUbic.isLoading ? 'Cargando…' : 'Seleccione la ubicación'}
                   searchPlaceholder="Buscar ubicación…"
                   disabled={enviando}
+                  multiline
                 />
                 <p className="text-xs text-slate-500">
                   El área define en qué relojes aparecerá. Elija la del reloj donde va a registrar la huella.

@@ -211,6 +211,7 @@ export function SinBiometricoMasiva({ idsCreados }: { idsCreados: number[] }) {
                 placeholder={bioDeptos.isLoading ? 'Cargando…' : 'Departamento BioTime'}
                 searchPlaceholder="Buscar departamento…"
                 disabled={registrando}
+                multiline
               />
             </div>
             <div className="space-y-1">
@@ -222,6 +223,7 @@ export function SinBiometricoMasiva({ idsCreados }: { idsCreados: number[] }) {
                 placeholder={bioUbic.isLoading ? 'Cargando…' : 'Ubicación'}
                 searchPlaceholder="Buscar ubicación…"
                 disabled={registrando}
+                multiline
               />
             </div>
             <p className="text-xs text-slate-500 sm:col-span-2">
