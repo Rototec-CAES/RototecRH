@@ -302,7 +302,7 @@ export default function EmpleadosListPage() {
     ancho === 0 || ancho >= 1320 ? 'completa' : ancho >= 940 ? 'compacta' : 'tarjetas'
   const completa = modo === 'completa'
   const columnas = completa ? 10 : 7
-  const celda = 'px-3'
+  const celda = 'px-3 py-2.5'
 
   /** Botones de la fila/tarjeta. `soloIcono` ahorra espacio en los diseños angostos. */
   const acciones = (e: EmpleadoBackend, soloIcono: boolean) => (
@@ -311,7 +311,7 @@ export default function EmpleadosListPage() {
         <Button
           variant="ghost"
           size="sm"
-          className="text-amber-700 hover:bg-amber-50 hover:text-amber-800"
+          className="h-8 px-2 text-amber-700 hover:bg-amber-50 hover:text-amber-800"
           title="Registrar en el biométrico"
           aria-label={`Registrar a ${displayName(e)} en el biométrico`}
           onClick={(ev) => {
@@ -326,6 +326,7 @@ export default function EmpleadosListPage() {
       <Button
         variant="ghost"
         size="sm"
+        className="h-8 px-2"
         title="Ver ficha"
         aria-label={`Ver ficha de ${displayName(e)}`}
         onClick={(ev) => {
@@ -456,163 +457,148 @@ export default function EmpleadosListPage() {
             />
           </div>
         </FilterRow>
-      </FilterCard>
 
-      {resumenFicha.incompletas > 0 && (
-        <div
-          className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm"
-          data-testid={`${TID}__resumen-ficha`}
-        >
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="mr-1 flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-              <Icon icon="solar:clipboard-list-bold" width={15} className="text-slate-400" />
-              Fichas (activos)
-            </span>
-            <FiltroChip
-              tono="ambar"
-              icon="solar:danger-circle-bold"
-              n={resumenFicha.incompletas}
-              titulo="Incompletas"
-              ayuda="Les falta al menos un dato obligatorio: no se pueden guardar cambios en su ficha hasta completarlos."
-              activa={filtroFicha === 'INCOMPLETA'}
-              onClick={() => verFicha('INCOMPLETA')}
-            />
-            <FiltroChip
-              tono="verde"
-              icon="solar:check-circle-bold"
-              n={resumenFicha.completas}
-              titulo="Completas"
-              ayuda="Tienen todos los datos obligatorios."
-              activa={filtroFicha === 'COMPLETA'}
-              onClick={() => verFicha('COMPLETA')}
-            />
-            <span className="mx-1 hidden h-5 w-px bg-slate-200 sm:block" />
-            <span className="text-xs text-slate-500">Falta:</span>
-            {SECCIONES_FICHA.map((x) => (
-              <FiltroChip
-                key={x.id}
-                tono="gris"
-                icon={x.icono}
-                n={resumenFicha.porSeccion[x.id]}
-                titulo={x.titulo}
-                ayuda={`Empleados activos a los que les falta algún dato de ${x.titulo}.`}
-                activa={filtroFicha === x.id}
-                onClick={() => verFicha(x.id)}
-              />
-            ))}
-            <Button
-              size="sm"
-              variant="outline"
-              className="ml-auto h-7 px-2.5 text-xs"
-              title="Descarga la plantilla solo con los empleados de ficha incompleta para completarlos de una vez"
-              onClick={() => navigate('/empleados/actualizacion-masiva?solo=incompletas')}
-              data-testid={`${TID}__btn-completar-excel`}
-            >
-              <Icon icon="solar:file-download-linear" width={14} />
-              Completar con Excel
-            </Button>
-          </div>
-        </div>
-      )}
+        {/* Resumen compacto (una sola línea): estado de fichas y del biométrico de los ACTIVOS.
+            Cada botón filtra la tabla; otro clic lo quita. El detalle por sección está en el filtro "Ficha". */}
+        {(fichas.size > 0 || hayPendientesBio) && (
+          <div className="mt-3 border-t border-dashed border-slate-200 pt-3">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
+              <div className="flex flex-wrap items-center gap-1.5" data-testid={`${TID}__resumen-ficha`}>
+                <span className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                  <Icon icon="solar:clipboard-list-bold" width={13} />
+                  Ficha
+                </span>
+                <FiltroChip
+                  tono="ambar"
+                  icon="solar:danger-circle-bold"
+                  n={resumenFicha.incompletas}
+                  titulo="Incompletas"
+                  ayuda="Les falta al menos un dato obligatorio: no se pueden guardar cambios en su ficha hasta completarlos. El detalle por sección está en el filtro Ficha."
+                  activa={filtroFicha === 'INCOMPLETA'}
+                  onClick={() => verFicha('INCOMPLETA')}
+                />
+                <FiltroChip
+                  tono="verde"
+                  icon="solar:check-circle-bold"
+                  n={resumenFicha.completas}
+                  titulo="Completas"
+                  ayuda="Tienen todos los datos obligatorios."
+                  activa={filtroFicha === 'COMPLETA'}
+                  onClick={() => verFicha('COMPLETA')}
+                />
+              </div>
 
-      {hayPendientesBio && (
-        <div
-          className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm"
-          data-testid={`${TID}__resumen-biometrico`}
-        >
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="mr-1 flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-              <Icon icon="solar:fingerprint-bold" width={15} className="text-slate-400" />
-              Biométrico (activos)
-            </span>
-            <PasoBio
-              tono="ambar"
-              n={resumenBio.SIN_BIOMETRICO}
-              paso="1"
-              titulo={ETIQUETA_ESTADO_BIO.SIN_BIOMETRICO}
-              ayuda={AYUDA_ESTADO_BIO.SIN_BIOMETRICO}
-              activa={filtroBio === 'SIN_BIOMETRICO'}
-              onClick={() => verEstadoBio('SIN_BIOMETRICO')}
-            />
-            <Icon icon="solar:alt-arrow-right-linear" width={14} className="hidden text-slate-300 sm:block" />
-            <PasoBio
-              tono="azul"
-              n={resumenBio.FALTA_HUELLA}
-              paso="2"
-              titulo={ETIQUETA_ESTADO_BIO.FALTA_HUELLA}
-              ayuda={AYUDA_ESTADO_BIO.FALTA_HUELLA}
-              activa={filtroBio === 'FALTA_HUELLA'}
-              onClick={() => verEstadoBio('FALTA_HUELLA')}
-            />
-            <Icon icon="solar:alt-arrow-right-linear" width={14} className="hidden text-slate-300 sm:block" />
-            <PasoBio
-              tono="verde"
-              n={resumenBio.CON_HUELLA}
-              paso="✓"
-              titulo={ETIQUETA_ESTADO_BIO.CON_HUELLA}
-              ayuda={AYUDA_ESTADO_BIO.CON_HUELLA}
-              activa={filtroBio === 'CON_HUELLA'}
-              onClick={() => verEstadoBio('CON_HUELLA')}
-            />
-            {resumenBio.NO_EN_BIOTIME > 0 && (
-              <PasoBio
-                tono="rojo"
-                n={resumenBio.NO_EN_BIOTIME}
-                paso="⚠"
-                titulo={ETIQUETA_ESTADO_BIO.NO_EN_BIOTIME}
-                ayuda={AYUDA_ESTADO_BIO.NO_EN_BIOTIME}
-                activa={filtroBio === 'NO_EN_BIOTIME'}
-                onClick={() => verEstadoBio('NO_EN_BIOTIME')}
-              />
-            )}
-            <div className="ml-auto flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 px-2 text-xs text-slate-500"
-                onClick={() => setAyudaBio((v) => !v)}
-                aria-expanded={ayudaBio}
-              >
-                <Icon icon="solar:question-circle-linear" width={14} />
-                ¿Qué significa?
-              </Button>
-              {resumenBio.SIN_BIOMETRICO > 0 && (
-                <Button
-                  size="sm"
-                  className="h-7 bg-amber-600 px-2.5 text-xs text-white hover:bg-amber-700"
-                  onClick={() => navigate('/empleados/biometrico')}
-                  data-testid={`${TID}__btn-pendientes-biometrico`}
+              <span className="mx-1 hidden h-5 w-px bg-slate-200 sm:block" aria-hidden />
+
+              <div className="flex flex-wrap items-center gap-1.5" data-testid={`${TID}__resumen-biometrico`}>
+                <span className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                  <Icon icon="solar:fingerprint-bold" width={13} />
+                  Biométrico
+                </span>
+                <PasoBio
+                  tono="ambar"
+                  n={resumenBio.SIN_BIOMETRICO}
+                  paso="1"
+                  titulo="Sin BioTime"
+                  ayuda={AYUDA_ESTADO_BIO.SIN_BIOMETRICO}
+                  activa={filtroBio === 'SIN_BIOMETRICO'}
+                  onClick={() => verEstadoBio('SIN_BIOMETRICO')}
+                />
+                <PasoBio
+                  tono="azul"
+                  n={resumenBio.FALTA_HUELLA}
+                  paso="2"
+                  titulo="Falta huella"
+                  ayuda={AYUDA_ESTADO_BIO.FALTA_HUELLA}
+                  activa={filtroBio === 'FALTA_HUELLA'}
+                  onClick={() => verEstadoBio('FALTA_HUELLA')}
+                />
+                <PasoBio
+                  tono="verde"
+                  n={resumenBio.CON_HUELLA}
+                  paso="✓"
+                  titulo="Con huella"
+                  ayuda={AYUDA_ESTADO_BIO.CON_HUELLA}
+                  activa={filtroBio === 'CON_HUELLA'}
+                  onClick={() => verEstadoBio('CON_HUELLA')}
+                />
+                {resumenBio.NO_EN_BIOTIME > 0 && (
+                  <PasoBio
+                    tono="rojo"
+                    n={resumenBio.NO_EN_BIOTIME}
+                    paso="⚠"
+                    titulo="Código no existe"
+                    ayuda={AYUDA_ESTADO_BIO.NO_EN_BIOTIME}
+                    activa={filtroBio === 'NO_EN_BIOTIME'}
+                    onClick={() => verEstadoBio('NO_EN_BIOTIME')}
+                  />
+                )}
+                <button
+                  type="button"
+                  onClick={() => setAyudaBio((v) => !v)}
+                  aria-expanded={ayudaBio}
+                  title="¿Qué significa cada estado del biométrico?"
+                  className={cn(
+                    'flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700',
+                    ayudaBio && 'bg-slate-100 text-slate-700',
+                  )}
                 >
-                  <Icon icon="solar:fingerprint-bold" width={14} />
-                  Registrar pendientes
-                </Button>
-              )}
-            </div>
-          </div>
+                  <Icon icon="solar:question-circle-linear" width={16} />
+                </button>
+              </div>
 
-          {ayudaBio && (
-            <div className="mt-2.5 grid gap-2 border-t border-dashed border-slate-200 pt-2.5 text-xs sm:grid-cols-2 lg:grid-cols-4">
-              {(['SIN_BIOMETRICO', 'FALTA_HUELLA', 'CON_HUELLA', 'NO_EN_BIOTIME'] as const).map((k) => (
-                <div key={k} className="space-y-0.5">
-                  <div className="font-semibold text-slate-700">
-                    {AYUDA_ESTADO_BIO[k].paso} · {ETIQUETA_ESTADO_BIO[k]}
+              <div className="ml-auto flex flex-wrap items-center gap-1.5">
+                {resumenFicha.incompletas > 0 && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 px-2.5 text-xs"
+                    title="Descarga la plantilla solo con los empleados de ficha incompleta para completarlos de una vez"
+                    onClick={() => navigate('/empleados/actualizacion-masiva?solo=incompletas')}
+                    data-testid={`${TID}__btn-completar-excel`}
+                  >
+                    <Icon icon="solar:file-download-linear" width={14} />
+                    Completar con Excel
+                  </Button>
+                )}
+                {resumenBio.SIN_BIOMETRICO > 0 && (
+                  <Button
+                    size="sm"
+                    className="h-7 bg-amber-600 px-2.5 text-xs text-white hover:bg-amber-700"
+                    onClick={() => navigate('/empleados/biometrico')}
+                    data-testid={`${TID}__btn-pendientes-biometrico`}
+                  >
+                    <Icon icon="solar:fingerprint-bold" width={14} />
+                    Registrar pendientes
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {ayudaBio && (
+              <div className="mt-2.5 grid gap-2 rounded-xl bg-slate-50 p-3 text-xs sm:grid-cols-2 xl:grid-cols-4">
+                {(['SIN_BIOMETRICO', 'FALTA_HUELLA', 'CON_HUELLA', 'NO_EN_BIOTIME'] as const).map((k) => (
+                  <div key={k} className="space-y-0.5">
+                    <div className="font-semibold text-slate-700">
+                      {AYUDA_ESTADO_BIO[k].paso} · {ETIQUETA_ESTADO_BIO[k]}
+                    </div>
+                    <p className="text-slate-500">{AYUDA_ESTADO_BIO[k].significa}</p>
+                    <p className="text-slate-500">
+                      <span className="font-medium text-slate-600">Quién lo resuelve:</span> {AYUDA_ESTADO_BIO[k].quien}
+                    </p>
                   </div>
-                  <p className="text-slate-500">{AYUDA_ESTADO_BIO[k].significa}</p>
-                  <p className="text-slate-500">
-                    <span className="font-medium text-slate-600">Quién lo resuelve:</span> {AYUDA_ESTADO_BIO[k].quien}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
 
-          {huellasQ.isError && (
-            <p className="mt-1.5 text-xs text-rose-600">
-              No se pudo consultar BioTime; los estados de huella no están disponibles por ahora.
-            </p>
-          )}
-        </div>
-      )}
+            {huellasQ.isError && (
+              <p className="mt-1.5 text-xs text-rose-600">
+                No se pudo consultar BioTime; los estados de huella no están disponibles por ahora.
+              </p>
+            )}
+          </div>
+        )}
+      </FilterCard>
 
       {/* Diseño según el ancho REAL disponible (la barra lateral cambia el espacio, no solo la pantalla):
           ≥ 1320 px tabla completa · ≥ 940 px tabla compacta (DPI/empresa/ingreso bajo otras columnas) · menor: tarjetas. */}
@@ -659,8 +645,10 @@ export default function EmpleadosListPage() {
                             )}
                           </div>
                         </div>
-                        <EmpleadoStatusBadge estado={e.estaActivo ? 'ACTIVO' : 'BAJA'} />
-                        <FichaIndicador ficha={fichas.get(e.id)} onCompletar={() => navigate(`/empleados/${e.id}/editar`)} />
+                        <div className="flex flex-wrap items-center gap-1">
+                          <EmpleadoStatusBadge estado={e.estaActivo ? 'ACTIVO' : 'BAJA'} />
+                          <FichaIndicador ficha={fichas.get(e.id)} onCompletar={() => navigate(`/empleados/${e.id}/editar`)} />
+                        </div>
                       </div>
                       <div className="text-sm text-slate-600">
                         <div className="break-words">{puestoNombre(e.idPuesto)}</div>
@@ -777,8 +765,10 @@ export default function EmpleadosListPage() {
                       </DataTableCell>
                     )}
                     <DataTableCell className={cn('align-top', celda)}>
-                      <EmpleadoStatusBadge estado={e.estaActivo ? 'ACTIVO' : 'BAJA'} />
+                      <div className="flex flex-wrap items-center gap-1">
+                        <EmpleadoStatusBadge estado={e.estaActivo ? 'ACTIVO' : 'BAJA'} />
                         <FichaIndicador ficha={fichas.get(e.id)} onCompletar={() => navigate(`/empleados/${e.id}/editar`)} />
+                      </div>
                       {!completa && (
                         <div className="mt-1 whitespace-nowrap text-[11px] tabular-nums text-slate-400">
                           Ingreso {formatDate(e.fechaContratacion)}
@@ -832,13 +822,13 @@ function PasoBio({
       aria-pressed={activa}
       title={`${ayuda.significa}\nQuién lo resuelve: ${ayuda.quien}\n(Clic para filtrar la tabla)`}
       className={cn(
-        'inline-flex h-8 items-center gap-1.5 rounded-lg border pl-1 pr-2.5 text-xs font-medium transition hover:brightness-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400',
+        'inline-flex h-7 items-center gap-1.5 rounded-lg border pl-1 pr-2 text-xs font-medium transition hover:brightness-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400',
         t.base,
         activa && t.activa,
         n === 0 && 'opacity-50',
       )}
     >
-      <span className={cn('flex h-5 min-w-5 items-center justify-center rounded-md px-1 text-[10px] font-bold text-white', t.num)}>
+      <span className={cn('flex h-[18px] min-w-[18px] items-center justify-center rounded-md px-1 text-[10px] font-bold text-white', t.num)}>
         {paso}
       </span>
       {titulo}
@@ -903,11 +893,11 @@ function FichaIndicador({ ficha, onCompletar }: { ficha: FaltantesFicha | undefi
         onCompletar()
       }}
       title={`Ficha incompleta. Falta: ${ficha.lista.join(', ')}.\nClic para completarla.`}
-      className="mt-1 flex items-center gap-1 whitespace-nowrap rounded-md border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800 transition hover:bg-amber-100"
+      className="flex items-center gap-1 whitespace-nowrap rounded-md border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800 transition hover:bg-amber-100"
       data-testid="rh-empleados__ficha-incompleta"
     >
       <Icon icon="solar:clipboard-remove-bold" width={12} />
-      Faltan {ficha.total} dato{ficha.total === 1 ? '' : 's'}
+      Faltan {ficha.total}
     </button>
   )
 }
