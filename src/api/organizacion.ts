@@ -69,6 +69,9 @@ export const organizacionApi = USE_MOCK ? mockApi : realApi
 export interface PuestoPlano {
   id: number
   nombre: string
+  /** Sub-departamento y departamento del puesto (para deducirlos si el empleado solo tiene puesto). */
+  idSubdepartamento?: number | null
+  idDepartamento?: number | null
 }
 export interface DepartamentoPlano {
   id: number

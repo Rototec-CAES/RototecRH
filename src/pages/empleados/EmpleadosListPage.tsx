@@ -31,6 +31,12 @@ import { notify } from '@/lib/notify'
 import { cn, formatDate, formatQ, nombreParaMostrar } from '@/lib/utils'
 import { useEmpleadosBackendList, useHuellasBiotime } from '@/hooks/useEmpleados'
 import { useElementWidth } from '@/hooks/useElementWidth'
+import {
+  SECCIONES_FICHA,
+  faltantesDesdeEmpleado,
+  type FaltantesFicha,
+  type SeccionFicha,
+} from '@/lib/fichaEmpleado'
 import { NameCombobox } from '@/components/ui/name-combobox'
 import {
   AYUDA_ESTADO_BIO,
@@ -48,6 +54,7 @@ import type { EmpleadoBackend } from '@/types'
 
 type EstadoFilter = 'TODOS' | 'ACTIVO' | 'BAJA'
 type BioFilter = 'TODOS' | EstadoBiometrico
+type FichaFilter = 'TODAS' | 'COMPLETA' | 'INCOMPLETA' | SeccionFicha
 const PAGE_SIZE = 20
 const TID = 'rh-empleados'
 
@@ -75,19 +82,39 @@ export default function EmpleadosListPage() {
   const navigate = useNavigate()
   const { data, isLoading, isError } = useEmpleadosBackendList()
   const huellasQ = useHuellasBiotime()
+  const { options: puestoOptions } = usePuestoOptions()
   // Índice por código BioTime. Si BioTime no responde, la tabla sigue funcionando y solo muestra el código.
   const huellasPorCodigo = useMemo(
     () => (huellasQ.data ? new Map(huellasQ.data.map((h) => [h.codigoBio, h])) : undefined),
     [huellasQ.data],
   )
   const bioDe = (e: EmpleadoBackend) => infoBiometrico(e.codigoEmpleadoBio, e.estaActivo, huellasPorCodigo)
+
+  /**
+   * Datos obligatorios que le faltan a cada empleado ACTIVO (misma regla que la pantalla de edición).
+   * Los dados de baja no se evalúan.
+   */
+  const fichas = useMemo(() => {
+    const m = new Map<number, FaltantesFicha>()
+    for (const e of data ?? []) if (e.estaActivo) m.set(e.id, faltantesDesdeEmpleado(e, puestoOptions))
+    return m
+  }, [data, puestoOptions])
+  const fichaCumple = (e: EmpleadoBackend, f: FichaFilter) => {
+    if (f === 'TODAS') return true
+    const fi = fichas.get(e.id)
+    if (!fi) return false // de baja: no aplica
+    if (f === 'COMPLETA') return fi.total === 0
+    if (f === 'INCOMPLETA') return fi.total > 0
+    return fi.porSeccion[f].length > 0
+  }
   const empresas = useEmpresas()
-  const { options: puestoOptions } = usePuestoOptions()
   const [filtroTexto, setFiltroTexto] = useState('')
   const [filtroEstado, setFiltroEstado] = useState<EstadoFilter>('TODOS')
   /** Opción del filtro de puesto (agrupada por nombre); null = todos. */
   const [filtroPuesto, setFiltroPuesto] = useState<number | null>(null)
   const [filtroBio, setFiltroBio] = useState<BioFilter>('TODOS')
+  /** Ficha: TODAS · COMPLETA · INCOMPLETA · o una sección concreta con datos faltantes. */
+  const [filtroFicha, setFiltroFicha] = useState<FichaFilter>('TODAS')
   const [registrarBio, setRegistrarBio] = useState<EmpleadoParaBiometrico | null>(null)
   const [ayudaBio, setAyudaBio] = useState(false)
   const [page, setPage] = useState(1)
@@ -134,6 +161,7 @@ export default function EmpleadosListPage() {
       if (filtroEstado === 'BAJA' && e.estaActivo) return false
       if (puestoElegido && (e.idPuesto == null || !puestoElegido.ids.has(e.idPuesto))) return false
       if (filtroBio !== 'TODOS' && bioDe(e).estado !== filtroBio) return false
+      if (!fichaCumple(e, filtroFicha)) return false
       if (!t) return true
       const full = displayName(e).toLowerCase()
       const dpi = e.numeroIdentificacionNacional ?? ''
@@ -141,7 +169,7 @@ export default function EmpleadosListPage() {
       return full.includes(t) || dpi.includes(t) || bio === t
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, filtroTexto, filtroEstado, puestoElegido, filtroBio, huellasPorCodigo])
+  }, [data, filtroTexto, filtroEstado, puestoElegido, filtroBio, huellasPorCodigo, filtroFicha, fichas])
 
   /** Conteo por estado biométrico de los empleados ACTIVOS (para el resumen sobre la tabla). */
   const resumenBio = useMemo(() => {
@@ -152,6 +180,25 @@ export default function EmpleadosListPage() {
     return c
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, huellasPorCodigo])
+  /** Resumen de fichas de los activos: completas, incompletas y cuántas tienen huecos en cada sección. */
+  const resumenFicha = useMemo(() => {
+    const porSeccion = Object.fromEntries(SECCIONES_FICHA.map((x) => [x.id, 0])) as Record<SeccionFicha, number>
+    let completas = 0
+    let incompletas = 0
+    for (const fi of fichas.values()) {
+      if (fi.total === 0) completas++
+      else incompletas++
+      for (const x of SECCIONES_FICHA) if (fi.porSeccion[x.id].length) porSeccion[x.id]++
+    }
+    return { completas, incompletas, porSeccion }
+  }, [fichas])
+  function verFicha(f: FichaFilter) {
+    const quitar = filtroFicha === f
+    setFiltroFicha(quitar ? 'TODAS' : f)
+    if (!quitar) setFiltroEstado('ACTIVO')
+    setPage(1)
+  }
+
   const hayPendientesBio = resumenBio.SIN_BIOMETRICO + resumenBio.NO_EN_BIOTIME + resumenBio.FALTA_HUELLA > 0
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
@@ -193,6 +240,8 @@ export default function EmpleadosListPage() {
         salario: e.salarioBaseContrato ?? '',
         contratacion: formatDate(e.fechaContratacion),
         estado: e.estaActivo ? 'Activo' : 'Baja',
+        ficha: !e.estaActivo ? '' : (fichas.get(e.id)?.total ?? 0) === 0 ? 'Completa' : `Faltan ${fichas.get(e.id)!.total}`,
+        faltantes: fichas.get(e.id)?.lista.join(', ') ?? '',
         ...(() => {
           const b = bioDe(e)
           return {
@@ -206,13 +255,15 @@ export default function EmpleadosListPage() {
       }))
       const estadoTxt =
         filtroEstado === 'ACTIVO' ? 'activos' : filtroEstado === 'BAJA' ? 'bajas' : 'todos'
+      const fichaTxt =
+        filtroFicha === 'TODAS' ? '' : filtroFicha === 'COMPLETA' ? '-fichas-completas' : '-fichas-incompletas'
       const bioTxt =
         filtroBio !== 'TODOS' ? `-${ETIQUETA_ESTADO_BIO[filtroBio].toLowerCase().replace(/\s+/g, '-')}` : ''
       const puestoTxt =
         puestoElegido
           ? `-${puestoElegido.base.toLowerCase().replace(/\s+/g, '-')}`
           : ''
-      await exportarExcel(`empleados-${estadoTxt}${bioTxt}${puestoTxt}-${stamp()}.xlsx`, [
+      await exportarExcel(`empleados-${estadoTxt}${fichaTxt}${bioTxt}${puestoTxt}-${stamp()}.xlsx`, [
         {
           nombre: 'Empleados',
           columnas: [
@@ -224,6 +275,8 @@ export default function EmpleadosListPage() {
             { header: 'Salario base', key: 'salario', width: 16 },
             { header: 'Fecha de ingreso', key: 'contratacion', width: 18 },
             { header: 'Estado', key: 'estado', width: 10 },
+            { header: 'Ficha', key: 'ficha', width: 12 },
+            { header: 'Datos faltantes', key: 'faltantes', width: 60 },
             { header: 'Código BioTime', key: 'biotime', width: 16 },
             { header: 'Estado biométrico', key: 'estadoBio', width: 20 },
             { header: 'Huellas', key: 'huellas', width: 9 },
@@ -371,6 +424,30 @@ export default function EmpleadosListPage() {
               </SelectContent>
             </Select>
           </div>
+          <div className="w-full sm:w-56">
+            <FieldLabel>Ficha</FieldLabel>
+            <Select
+              value={filtroFicha}
+              onValueChange={(v) => {
+                setFiltroFicha(v as FichaFilter)
+                setPage(1)
+              }}
+            >
+              <SelectTrigger className="rounded-xl" data-testid={`${TID}__filtro-ficha`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="TODAS">Todas</SelectItem>
+                <SelectItem value="INCOMPLETA">⚠ Incompletas (faltan datos)</SelectItem>
+                <SelectItem value="COMPLETA">✓ Completas</SelectItem>
+                {SECCIONES_FICHA.map((x) => (
+                  <SelectItem key={x.id} value={x.id}>
+                    Falta: {x.titulo}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <div className="ml-auto self-center">
             <TableResultCount
               total={data?.length ?? 0}
@@ -380,6 +457,63 @@ export default function EmpleadosListPage() {
           </div>
         </FilterRow>
       </FilterCard>
+
+      {resumenFicha.incompletas > 0 && (
+        <div
+          className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm"
+          data-testid={`${TID}__resumen-ficha`}
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="mr-1 flex items-center gap-1.5 text-xs font-semibold text-slate-600">
+              <Icon icon="solar:clipboard-list-bold" width={15} className="text-slate-400" />
+              Fichas (activos)
+            </span>
+            <FiltroChip
+              tono="ambar"
+              icon="solar:danger-circle-bold"
+              n={resumenFicha.incompletas}
+              titulo="Incompletas"
+              ayuda="Les falta al menos un dato obligatorio: no se pueden guardar cambios en su ficha hasta completarlos."
+              activa={filtroFicha === 'INCOMPLETA'}
+              onClick={() => verFicha('INCOMPLETA')}
+            />
+            <FiltroChip
+              tono="verde"
+              icon="solar:check-circle-bold"
+              n={resumenFicha.completas}
+              titulo="Completas"
+              ayuda="Tienen todos los datos obligatorios."
+              activa={filtroFicha === 'COMPLETA'}
+              onClick={() => verFicha('COMPLETA')}
+            />
+            <span className="mx-1 hidden h-5 w-px bg-slate-200 sm:block" />
+            <span className="text-xs text-slate-500">Falta:</span>
+            {SECCIONES_FICHA.map((x) => (
+              <FiltroChip
+                key={x.id}
+                tono="gris"
+                icon={x.icono}
+                n={resumenFicha.porSeccion[x.id]}
+                titulo={x.titulo}
+                ayuda={`Empleados activos a los que les falta algún dato de ${x.titulo}.`}
+                activa={filtroFicha === x.id}
+                onClick={() => verFicha(x.id)}
+              />
+            ))}
+            <Button
+              size="sm"
+              variant="outline"
+              className="ml-auto h-7 px-2.5 text-xs"
+              title="Descarga la plantilla solo con los empleados de ficha incompleta para completarlos de una vez"
+              onClick={() => navigate('/empleados/actualizacion-masiva?solo=incompletas')}
+              data-testid={`${TID}__btn-completar-excel`}
+            >
+              <Icon icon="solar:file-download-linear" width={14} />
+              Completar con Excel
+            </Button>
+          </div>
+        </div>
+      )}
 
       {hayPendientesBio && (
         <div
@@ -526,6 +660,7 @@ export default function EmpleadosListPage() {
                           </div>
                         </div>
                         <EmpleadoStatusBadge estado={e.estaActivo ? 'ACTIVO' : 'BAJA'} />
+                        <FichaIndicador ficha={fichas.get(e.id)} onCompletar={() => navigate(`/empleados/${e.id}/editar`)} />
                       </div>
                       <div className="text-sm text-slate-600">
                         <div className="break-words">{puestoNombre(e.idPuesto)}</div>
@@ -643,6 +778,7 @@ export default function EmpleadosListPage() {
                     )}
                     <DataTableCell className={cn('align-top', celda)}>
                       <EmpleadoStatusBadge estado={e.estaActivo ? 'ACTIVO' : 'BAJA'} />
+                        <FichaIndicador ficha={fichas.get(e.id)} onCompletar={() => navigate(`/empleados/${e.id}/editar`)} />
                       {!completa && (
                         <div className="mt-1 whitespace-nowrap text-[11px] tabular-nums text-slate-400">
                           Ingreso {formatDate(e.fechaContratacion)}
@@ -707,6 +843,71 @@ function PasoBio({
       </span>
       {titulo}
       <span className="font-bold tabular-nums">{n}</span>
+    </button>
+  )
+}
+
+const TONO_FILTRO = {
+  ambar: { base: 'border-amber-200 bg-amber-50 text-amber-900', activa: 'ring-2 ring-amber-400' },
+  verde: { base: 'border-emerald-200 bg-emerald-50 text-emerald-900', activa: 'ring-2 ring-emerald-400' },
+  gris: { base: 'border-slate-200 bg-slate-50 text-slate-700', activa: 'ring-2 ring-slate-400' },
+}
+
+/** Botón compacto de resumen: ícono · etiqueta · cantidad. Clic = filtrar la tabla (otro clic lo quita). */
+function FiltroChip({
+  tono,
+  icon,
+  n,
+  titulo,
+  ayuda,
+  activa,
+  onClick,
+}: {
+  tono: keyof typeof TONO_FILTRO
+  icon: string
+  n: number
+  titulo: string
+  ayuda: string
+  activa: boolean
+  onClick: () => void
+}) {
+  const t = TONO_FILTRO[tono]
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={activa}
+      title={`${ayuda}\n(Clic para filtrar la tabla)`}
+      className={cn(
+        'inline-flex h-7 items-center gap-1.5 rounded-lg border px-2 text-xs font-medium transition hover:brightness-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400',
+        t.base,
+        activa && t.activa,
+        n === 0 && 'opacity-50',
+      )}
+    >
+      <Icon icon={icon} width={13} className="shrink-0" />
+      {titulo}
+      <span className="font-bold tabular-nums">{n}</span>
+    </button>
+  )
+}
+
+/** "Faltan N datos" bajo el estado del empleado; clic = ir a completar la ficha. */
+function FichaIndicador({ ficha, onCompletar }: { ficha: FaltantesFicha | undefined; onCompletar: () => void }) {
+  if (!ficha || ficha.total === 0) return null
+  return (
+    <button
+      type="button"
+      onClick={(ev) => {
+        ev.stopPropagation()
+        onCompletar()
+      }}
+      title={`Ficha incompleta. Falta: ${ficha.lista.join(', ')}.\nClic para completarla.`}
+      className="mt-1 flex items-center gap-1 whitespace-nowrap rounded-md border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800 transition hover:bg-amber-100"
+      data-testid="rh-empleados__ficha-incompleta"
+    >
+      <Icon icon="solar:clipboard-remove-bold" width={12} />
+      Faltan {ficha.total} dato{ficha.total === 1 ? '' : 's'}
     </button>
   )
 }

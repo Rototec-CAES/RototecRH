@@ -10,13 +10,20 @@ const QK = {
 /**
  * Obtiene la lista plana de puestos desde GET /rrhh/organizacion/puestos.
  */
-export function usePuestoOptions(): { options: NameOption[]; isLoading: boolean } {
+export type PuestoOption = NameOption & { idSubdepartamento: number | null; idDepartamento: number | null }
+
+export function usePuestoOptions(): { options: PuestoOption[]; isLoading: boolean } {
   const { data, isLoading } = useQuery({
     queryKey: QK.puestos,
     queryFn: () => estructuraPlanaApi.listPuestos(),
     staleTime: 5 * 60 * 1000,
   })
-  const options: NameOption[] = (data ?? []).map((p) => ({ id: p.id, nombre: p.nombre }))
+  const options: PuestoOption[] = (data ?? []).map((p) => ({
+    id: p.id,
+    nombre: p.nombre,
+    idSubdepartamento: p.idSubdepartamento ?? null,
+    idDepartamento: p.idDepartamento ?? null,
+  }))
   return { options, isLoading }
 }
 
