@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useFormContext } from 'react-hook-form'
 import {
   SEXOS,
@@ -19,7 +20,8 @@ import {
   useSubDepartamentos,
   usePuestos,
 } from '@/hooks/useCompanyCatalogos'
-import { useBiotimeDepartamentos, useBiotimeUbicaciones } from '@/hooks/useBiotime'
+import { useBiotimeDepartamentos, useBiotimePosiciones, useBiotimeUbicaciones } from '@/hooks/useBiotime'
+import { posicionBiotimePorNombre } from '@/lib/biometrico'
 import type { EmpleadoCreateValues } from '@/lib/validators'
 import { CheckboxField, DocumentoIdentidadField, SelectField, TextField, type Opt } from './fields'
 import { documentoIdentidad } from '@/lib/documentosPais'
@@ -79,7 +81,7 @@ const DOCUMENTO_DEFAULT = {
 }
 
 export function StepContent({ index }: { index: number }) {
-  const { watch } = useFormContext<EmpleadoCreateValues>()
+  const { watch, setValue, getValues } = useFormContext<EmpleadoCreateValues>()
   const paisKey = watch('PAIS')
   const empresaId = numOrUndef(watch('empresa_id'))
   const departamentoId = numOrUndef(watch('id_departamento'))
@@ -94,6 +96,15 @@ export function StepContent({ index }: { index: number }) {
   const puestos = usePuestos(subDepId)
   const bioDeptos = useBiotimeDepartamentos()
   const bioUbic = useBiotimeUbicaciones()
+  const bioPos = useBiotimePosiciones()
+  // Preselecciona el puesto de BioTime con el mismo nombre que el puesto elegido en RRHH (si está vacío).
+  const puestoId = numOrUndef(watch('id_puesto'))
+  const puestoRrhh = puestos.data?.find((p) => p.id === puestoId)?.nombre
+  const posSugerida = posicionBiotimePorNombre(puestoRrhh, bioPos.data)
+  useEffect(() => {
+    if (posSugerida && !getValues('posicion_biotime'))
+      setValue('posicion_biotime', String(posSugerida) as never, { shouldDirty: false })
+  }, [posSugerida, getValues, setValue])
 
   const docs = DOCUMENTOS_POR_PAIS[paisKey ?? ''] ?? DOCUMENTO_DEFAULT
   const docIdentidad = documentoIdentidad(paisKey)
@@ -250,6 +261,12 @@ export function StepContent({ index }: { index: number }) {
             required
             loading={bioUbic.isLoading}
             options={toOpt(bioUbic.data)}
+          />
+          <SelectField
+            name="posicion_biotime"
+            label="Puesto (biométrico) · opcional"
+            loading={bioPos.isLoading}
+            options={toOpt(bioPos.data)}
           />
         </div>
       )

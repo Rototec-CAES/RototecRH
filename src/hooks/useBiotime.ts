@@ -8,3 +8,6 @@ export const useBiotimeDepartamentos = () =>
 
 export const useBiotimeUbicaciones = () =>
   useQuery({ queryKey: ['biotime', 'ubicaciones'], queryFn: () => biotimeApi.ubicaciones(), staleTime: HORA })
+
+export const useBiotimePosiciones = () =>
+  useQuery({ queryKey: ['biotime', 'posiciones'], queryFn: () => biotimeApi.posiciones(), staleTime: HORA })

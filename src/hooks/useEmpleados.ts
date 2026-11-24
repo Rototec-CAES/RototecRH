@@ -157,10 +157,11 @@ export function useAplicarActualizacionMasiva() {
 export function useRegistrarBiometrico() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (v: { id: number; departamento_biotime: number; ubicacion_biometrico: number }) =>
+    mutationFn: (v: { id: number; departamento_biotime: number; ubicacion_biometrico: number; posicion_biotime?: number }) =>
       actualizacionMasivaApi.registrarBiometrico(v.id, {
         departamento_biotime: v.departamento_biotime,
         ubicacion_biometrico: v.ubicacion_biometrico,
+        ...(v.posicion_biotime ? { posicion_biotime: v.posicion_biotime } : {}),
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QK.all })

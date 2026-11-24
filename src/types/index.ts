@@ -614,6 +614,7 @@ export interface CreateEmpleadoInput {
   // biométrico
   departamento_biotime: number
   ubicacion_biometrico: number
+  posicion_biotime?: number
   // horas extra
   habilitar_horas_extra?: boolean
 }

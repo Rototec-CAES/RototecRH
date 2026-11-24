@@ -485,7 +485,7 @@ export default function EmpleadosListPage() {
                         aria-label={`Registrar a ${displayName(e)} en el biométrico`}
                         onClick={(ev) => {
                           ev.stopPropagation()
-                          setRegistrarBio({ id: e.id, nombre: displayName(e) })
+                          setRegistrarBio({ id: e.id, nombre: displayName(e), puesto: puestoNombre(e.idPuesto) })
                         }}
                         data-testid={`${TID}__btn-registrar-bio-${e.id}`}
                       >

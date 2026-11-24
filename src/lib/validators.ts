@@ -367,6 +367,11 @@ export const empleadoCreateSchema = z
     // biométrico
     departamento_biotime: reqId,
     ubicacion_biometrico: reqId,
+    // Puesto (cargo) de BioTime: opcional.
+    posicion_biotime: z.preprocess(
+      (v) => (v === '' || v === null || v === undefined ? undefined : Number(v)),
+      z.number().int().positive().optional(),
+    ),
     // horas extra
     habilitar_horas_extra: z.boolean().default(false),
   })
@@ -414,7 +419,7 @@ export const WIZARD_STEP_FIELDS: (keyof EmpleadoCreateValues)[][] = [
   ['jornada', 'temporalidad_contrato', 'tipo_contrato', 'fecha_contratacion', 'fecha_reingreso',
    'salario_base_contrato', 'profesion', 'titulo', 'forma_pago', 'frecuencia_pago', 'codigo_banco', 'numero_cuenta', 'tipo_cuenta',
    'habilitar_horas_extra'],
-  ['departamento_biotime', 'ubicacion_biometrico'],
+  ['departamento_biotime', 'ubicacion_biometrico', 'posicion_biotime'],
 ]
 
 // =====================================================

@@ -37,7 +37,7 @@ export const actualizacionMasivaApi = {
   /** Registra en BioTime a un empleado existente y devuelve su código de biométrico. */
   async registrarBiometrico(
     id: number,
-    body: { departamento_biotime: number; ubicacion_biometrico: number },
+    body: { departamento_biotime: number; ubicacion_biometrico: number; posicion_biotime?: number },
   ): Promise<{ id: number; codigoEmpleadoBio: number }> {
     const { data } = await api.post<{ id: number; codigoEmpleadoBio: number }>(`/empleados/${id}/biometrico`, body)
     return data

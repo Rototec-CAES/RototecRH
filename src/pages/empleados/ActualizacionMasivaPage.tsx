@@ -387,7 +387,7 @@ export default function ActualizacionMasivaPage() {
                         {resumen.nuevos > 0 && (
                           <>
                             Se crearán <b>{resumen.nuevos}</b> empleado{resumen.nuevos === 1 ? '' : 's'} nuevo
-                            {resumen.nuevos === 1 ? '' : 's'} (sin registro en el biométrico).{' '}
+                            {resumen.nuevos === 1 ? '' : 's'} (quedarán <b>sin registrar en BioTime</b>; se registran al terminar).{' '}
                           </>
                         )}
                         Revise la tabla y presione «Actualizar».
@@ -528,9 +528,31 @@ export default function ActualizacionMasivaPage() {
                   .
                 </p>
                 {resultado.creados > 0 && (
-                  <p className="mt-1 text-xs text-amber-700">
-                    Los empleados nuevos no quedaron registrados en el biométrico; regístrelos en la tabla de abajo para que puedan marcar.
-                  </p>
+                  <Alert variant="warning" className="mx-auto mt-3 max-w-2xl text-left">
+                    <Icon icon="solar:fingerprint-bold" width={18} />
+                    <AlertTitle>
+                      Falta registrar {resultado.creados === 1 ? 'al empleado nuevo' : `a los ${resultado.creados} empleados nuevos`}{' '}
+                      en el biométrico
+                    </AlertTitle>
+                    <AlertDescription>
+                      <ol className="mt-1 list-decimal space-y-0.5 pl-4">
+                        <li>
+                          <strong>Ahora, aquí abajo:</strong> elija departamento, ubicación y (opcional) puesto de
+                          BioTime y presione <strong>Registrar</strong>. Cada uno recibe su código BioTime.
+                        </li>
+                        <li>
+                          <strong>Después, en el reloj:</strong> buscar ese código → Editar → Huella.
+                        </li>
+                      </ol>
+                      <p className="mt-1.5 text-xs">
+                        Si sale de esta pantalla sin registrarlos, quedan en{' '}
+                        <Link to="/empleados/biometrico" className="font-semibold underline">
+                          Empleados → Pendientes de biométrico
+                        </Link>{' '}
+                        y marcados como “Sin registrar en BioTime” en la tabla de empleados.
+                      </p>
+                    </AlertDescription>
+                  </Alert>
                 )}
               </div>
               <div className="flex flex-wrap justify-center gap-2">
@@ -563,6 +585,20 @@ export default function ActualizacionMasivaPage() {
               Esta acción no se puede deshacer desde esta pantalla.
             </DialogDescription>
           </DialogHeader>
+          {(resumen?.nuevos ?? 0) > 0 && (
+            <Alert variant="warning">
+              <Icon icon="solar:fingerprint-bold" width={18} />
+              <AlertTitle>
+                Los {resumen!.nuevos} empleado{resumen!.nuevos === 1 ? '' : 's'} nuevo{resumen!.nuevos === 1 ? '' : 's'}{' '}
+                quedarán sin registrar en BioTime
+              </AlertTitle>
+              <AlertDescription>
+                La carga masiva no los registra en el biométrico, así que no aparecerán en el reloj ni podrán marcar.
+                Al terminar, regístrelos en la tabla que aparece abajo (departamento, ubicación y, opcional, puesto de
+                BioTime). Después falta registrar su huella en el reloj.
+              </AlertDescription>
+            </Alert>
+          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmar(false)} disabled={aplicarMut.isPending}>
               Cancelar

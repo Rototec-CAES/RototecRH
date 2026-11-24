@@ -12,12 +12,15 @@ import {
 } from '@/components/ui/dialog'
 import { NameCombobox } from '@/components/ui/name-combobox'
 import { extractApiErrorMessage } from '@/api/client'
-import { useBiotimeDepartamentos, useBiotimeUbicaciones } from '@/hooks/useBiotime'
+import { useBiotimeDepartamentos, useBiotimePosiciones, useBiotimeUbicaciones } from '@/hooks/useBiotime'
+import { posicionBiotimePorNombre } from '@/lib/biometrico'
 import { useRegistrarBiometrico } from '@/hooks/useEmpleados'
 
 export interface EmpleadoParaBiometrico {
   id: number
   nombre: string
+  /** Puesto en RRHH: sirve para preseleccionar el puesto de BioTime con el mismo nombre. */
+  puesto?: string | null
 }
 
 /**
@@ -33,9 +36,12 @@ export function RegistrarBiometricoDialog({
 }) {
   const bioDeptos = useBiotimeDepartamentos()
   const bioUbic = useBiotimeUbicaciones()
+  const bioPos = useBiotimePosiciones()
   const registrar = useRegistrarBiometrico()
   const [departamento, setDepartamento] = useState<number | null>(null)
   const [ubicacion, setUbicacion] = useState<number | null>(null)
+  const [posicion, setPosicion] = useState<number | null>(null)
+  const [posicionTocada, setPosicionTocada] = useState(false)
   const [codigo, setCodigo] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -43,11 +49,19 @@ export function RegistrarBiometricoDialog({
   useEffect(() => {
     setDepartamento(null)
     setUbicacion(null)
+    setPosicion(null)
+    setPosicionTocada(false)
     setCodigo(null)
     setError(null)
     registrar.reset()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [empleado?.id])
+
+  // Preselecciona el puesto de BioTime con el mismo nombre que el de RRHH (si el usuario no lo cambió).
+  const sugerida = posicionBiotimePorNombre(empleado?.puesto, bioPos.data)
+  useEffect(() => {
+    if (!posicionTocada) setPosicion(sugerida)
+  }, [sugerida, posicionTocada])
 
   const open = empleado != null
   const enviando = registrar.isPending
@@ -60,6 +74,7 @@ export function RegistrarBiometricoDialog({
         id: empleado.id,
         departamento_biotime: departamento,
         ubicacion_biometrico: ubicacion,
+        ...(posicion ? { posicion_biotime: posicion } : {}),
       })
       setCodigo(r.codigoEmpleadoBio)
       toast.success('Empleado registrado en el biométrico')
@@ -126,6 +141,37 @@ export function RegistrarBiometricoDialog({
                 />
                 <p className="text-xs text-slate-500">
                   El área define en qué relojes aparecerá. Elija la del reloj donde va a registrar la huella.
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <span className="text-xs font-semibold text-slate-600">
+                  Puesto (biométrico) <span className="font-normal text-slate-400">· opcional</span>
+                </span>
+                <NameCombobox
+                  options={bioPos.data ?? []}
+                  value={posicion}
+                  onChange={(v) => {
+                    setPosicionTocada(true)
+                    setPosicion(v)
+                  }}
+                  placeholder={bioPos.isLoading ? 'Cargando…' : 'Sin puesto'}
+                  searchPlaceholder="Buscar puesto…"
+                  disabled={enviando}
+                  multiline
+                />
+                <p className="text-xs text-slate-500">
+                  {empleado?.puesto ? (
+                    <>
+                      Puesto en RRHH: <strong className="text-slate-600">{empleado.puesto}</strong>.{' '}
+                      {sugerida && posicion === sugerida
+                        ? 'Se eligió el puesto de BioTime con el mismo nombre.'
+                        : !sugerida
+                          ? 'No hay uno con el mismo nombre en BioTime; elija el más parecido o déjelo vacío.'
+                          : ''}
+                    </>
+                  ) : (
+                    'Solo informativo en BioTime; no es necesario para marcar.'
+                  )}
                 </p>
               </div>
               {error && (

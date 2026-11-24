@@ -407,7 +407,7 @@ export default function EmpleadoDetailPage() {
         empleadoNombre={nombreDisplay}
       />
       <RegistrarBiometricoDialog
-        empleado={bioOpen ? { id: data.id, nombre: nombreDisplay } : null}
+        empleado={bioOpen ? { id: data.id, nombre: nombreDisplay, puesto: puestoNombre !== '—' ? puestoNombre : null } : null}
         onClose={() => setBioOpen(false)}
       />
     </div>

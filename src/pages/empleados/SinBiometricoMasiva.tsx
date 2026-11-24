@@ -11,7 +11,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Segmented } from '@/shared/report/report-ui'
 import { actualizacionMasivaApi } from '@/api/actualizacionMasiva'
 import { extractApiErrorMessage } from '@/api/client'
-import { useBiotimeDepartamentos, useBiotimeUbicaciones } from '@/hooks/useBiotime'
+import { useBiotimeDepartamentos, useBiotimePosiciones, useBiotimeUbicaciones } from '@/hooks/useBiotime'
+import { posicionBiotimePorNombre } from '@/lib/biometrico'
 import { cn, formatDate } from '@/lib/utils'
 
 type Alcance = 'CARGA' | 'TODOS'
@@ -42,6 +43,9 @@ export function SinBiometricoMasiva({ idsCreados }: { idsCreados: number[] }) {
   })
   const bioDeptos = useBiotimeDepartamentos()
   const bioUbic = useBiotimeUbicaciones()
+  const bioPos = useBiotimePosiciones()
+  /** Puesto de BioTime elegido a mano por fila (undefined = usar el sugerido por nombre; null = sin puesto). */
+  const [posPorFila, setPosPorFila] = useState<Record<number, number | null>>({})
 
   const [alcance, setAlcance] = useState<Alcance>(idsCreados.length ? 'CARGA' : 'TODOS')
   const [general, setGeneral] = useState<DatosBio>({ departamento: null, ubicacion: null })
@@ -65,6 +69,9 @@ export function SinBiometricoMasiva({ idsCreados }: { idsCreados: number[] }) {
     departamento: porFila[id]?.departamento ?? general.departamento,
     ubicacion: porFila[id]?.ubicacion ?? general.ubicacion,
   })
+  const opcPos: NameOption[] = bioPos.data ?? []
+  const posicionDe = (e: { id: number; puesto: string | null }): number | null =>
+    e.id in posPorFila ? posPorFila[e.id] : posicionBiotimePorNombre(e.puesto, bioPos.data)
   const pendiente = (id: number) => estados[id]?.tipo !== 'ok'
   const seleccionables = filas.filter((e) => pendiente(e.id))
   /** "Seleccionar todos" deja fuera a los que ya parecen existir en BioTime: se deben vincular, no registrar. */
@@ -79,6 +86,8 @@ export function SinBiometricoMasiva({ idsCreados }: { idsCreados: number[] }) {
     seleccionablesSinDuplicado.length > 0 &&
     seleccionablesSinDuplicado.every((e) => seleccion.has(e.id))
   const seleccionadosDuplicados = seleccionados.filter((e) => e.posibleCodigoBio != null)
+  /** Seleccionados que se registrarán sin puesto en BioTime (no hay uno con el mismo nombre y no se eligió). */
+  const seleccionadosSinPuesto = bioPos.data ? seleccionados.filter((e) => !posicionDe(e)) : []
 
   function alternar(id: number, on: boolean) {
     setSeleccion((prev) => {
@@ -102,9 +111,11 @@ export function SinBiometricoMasiva({ idsCreados }: { idsCreados: number[] }) {
       const d = datosDe(e.id)
       setEstados((prev) => ({ ...prev, [e.id]: { tipo: 'procesando' } }))
       try {
+        const posicion = posicionDe(e)
         const r = await actualizacionMasivaApi.registrarBiometrico(e.id, {
           departamento_biotime: d.departamento!,
           ubicacion_biometrico: d.ubicacion!,
+          ...(posicion ? { posicion_biotime: posicion } : {}),
         })
         ok++
         setEstados((prev) => ({ ...prev, [e.id]: { tipo: 'ok', codigo: r.codigoEmpleadoBio } }))
@@ -231,6 +242,21 @@ export function SinBiometricoMasiva({ idsCreados }: { idsCreados: number[] }) {
             </p>
           </div>
 
+          {seleccionadosSinPuesto.length > 0 && (
+            <Alert variant="info">
+              <Icon icon="solar:case-round-bold" width={18} />
+              <AlertTitle>
+                {seleccionadosSinPuesto.length} seleccionado{seleccionadosSinPuesto.length === 1 ? '' : 's'} sin puesto
+                de BioTime
+              </AlertTitle>
+              <AlertDescription>
+                Su puesto de RRHH no tiene uno con el mismo nombre en BioTime. Puede elegirlo en la columna
+                <strong> Puesto BioTime</strong> o registrarlos así: el puesto es solo informativo y{' '}
+                <strong>no impide</strong> registrar la huella ni marcar.
+              </AlertDescription>
+            </Alert>
+          )}
+
           {posiblesDuplicados.length > 0 && (
             <Alert variant="warning">
               <Icon icon="solar:danger-triangle-bold" width={18} />
@@ -273,6 +299,12 @@ export function SinBiometricoMasiva({ idsCreados }: { idsCreados: number[] }) {
                   <TableHead className="min-w-[160px]">Puesto / Departamento</TableHead>
                   <TableHead className="min-w-[200px]">Departamento BioTime</TableHead>
                   <TableHead className="min-w-[200px]">Ubicación</TableHead>
+                  <TableHead
+                    className="min-w-[210px]"
+                    title="Opcional. Se preselecciona el puesto de BioTime con el mismo nombre que el de RRHH."
+                  >
+                    Puesto BioTime <span className="font-normal text-slate-400">· opcional</span>
+                  </TableHead>
                   <TableHead className="min-w-[160px]">Estado</TableHead>
                 </TableRow>
               </TableHeader>
@@ -389,6 +421,27 @@ export function SinBiometricoMasiva({ idsCreados }: { idsCreados: number[] }) {
                           disabled={registrando || hecho}
                         />
                       </TableCell>
+                      <TableCell>
+                        <NameCombobox
+                          options={opcPos}
+                          value={posicionDe(e)}
+                          onChange={(v) => setPosPorFila((prev) => ({ ...prev, [e.id]: v }))}
+                          placeholder={bioPos.isLoading ? 'Cargando…' : 'Sin puesto'}
+                          searchPlaceholder="Buscar puesto…"
+                          disabled={registrando || hecho}
+                        />
+                        {!hecho && bioPos.data && (
+                          <div className="mt-1 text-[11px] leading-tight">
+                            {!(e.id in posPorFila) && posicionBiotimePorNombre(e.puesto, bioPos.data) ? (
+                              <span className="text-emerald-700">✓ Igual al puesto de RRHH</span>
+                            ) : !posicionDe(e) ? (
+                              <span className="text-amber-700">
+                                Sin coincidencia{e.puesto ? ` para “${e.puesto}”` : ''}: elija uno o quedará sin puesto
+                              </span>
+                            ) : null}
+                          </div>
+                        )}
+                      </TableCell>
                       <TableCell className="text-sm">
                         {!est ? (
                           <span className="text-amber-700">Sin registrar en BioTime</span>
@@ -420,6 +473,7 @@ export function SinBiometricoMasiva({ idsCreados }: { idsCreados: number[] }) {
               {seleccionados.length} seleccionado{seleccionados.length === 1 ? '' : 's'}
               {registradosOk > 0 && ` · ${registradosOk} ya registrado${registradosOk === 1 ? '' : 's'}`}
               {faltanDatos.length > 0 && ` · ${faltanDatos.length} sin departamento/ubicación de BioTime`}
+              {seleccionadosSinPuesto.length > 0 && ` · ${seleccionadosSinPuesto.length} sin puesto BioTime`}
               {seleccionadosDuplicados.length > 0 && (
                 <span className="font-semibold text-amber-700">
                   {` · ${seleccionadosDuplicados.length} ya existe${seleccionadosDuplicados.length === 1 ? '' : 'n'} en BioTime: se duplicará${seleccionadosDuplicados.length === 1 ? '' : 'n'} (mejor vincular)`}

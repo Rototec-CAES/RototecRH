@@ -79,3 +79,19 @@ export function formatFechaHuella(iso: string | null | undefined): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(iso ?? '')
   return m ? `${m[3]}/${m[2]}/${m[1]} ${m[4]}:${m[5]}` : '—'
 }
+
+const normalizar = (s: string) =>
+  s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, ' ').trim()
+
+/**
+ * Puesto de BioTime con el MISMO nombre que el puesto de RRHH (sin tildes ni mayúsculas), para preseleccionarlo.
+ * No se usa tPuestos.codigo_biotime: está incompleto y en varios puestos apunta a otro cargo.
+ */
+export function posicionBiotimePorNombre(
+  puestoRrhh: string | null | undefined,
+  posiciones: { id: number; nombre: string }[] | undefined,
+): number | null {
+  if (!puestoRrhh || !posiciones) return null
+  const n = normalizar(puestoRrhh)
+  return posiciones.find((p) => normalizar(p.nombre) === n)?.id ?? null
+}
