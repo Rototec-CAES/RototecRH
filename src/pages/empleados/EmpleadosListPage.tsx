@@ -20,6 +20,7 @@ import {
   DataTableHeadCell,
   DataTableRow,
   DataTableSkeleton,
+  EmptyState,
 } from '@/components/shared/DataTable'
 import { Pagination } from '@/components/shared/Pagination'
 import { TableResultCount, TableSearch } from '@/components/shared/TableToolbar'
@@ -29,6 +30,7 @@ import { stamp } from '@/shared/report/report-utils'
 import { notify } from '@/lib/notify'
 import { cn, formatDate, formatQ, nombreParaMostrar } from '@/lib/utils'
 import { useEmpleadosBackendList, useHuellasBiotime } from '@/hooks/useEmpleados'
+import { useElementWidth } from '@/hooks/useElementWidth'
 import {
   AYUDA_ESTADO_BIO,
   ETIQUETA_ESTADO_BIO,
@@ -210,6 +212,49 @@ export default function EmpleadosListPage() {
       setExportando(false)
     }
   }
+
+  // Diseño según el espacio real de la tabla.
+  const [contenedorRef, ancho] = useElementWidth()
+  const modo: 'completa' | 'compacta' | 'tarjetas' =
+    ancho === 0 || ancho >= 1320 ? 'completa' : ancho >= 940 ? 'compacta' : 'tarjetas'
+  const completa = modo === 'completa'
+  const columnas = completa ? 10 : 7
+  const celda = 'px-3'
+
+  /** Botones de la fila/tarjeta. `soloIcono` ahorra espacio en los diseños angostos. */
+  const acciones = (e: EmpleadoBackend, soloIcono: boolean) => (
+    <div className="flex shrink-0 justify-end gap-1">
+      {e.estaActivo && e.codigoEmpleadoBio == null && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-amber-700 hover:bg-amber-50 hover:text-amber-800"
+          title="Registrar en el biométrico"
+          aria-label={`Registrar a ${displayName(e)} en el biométrico`}
+          onClick={(ev) => {
+            ev.stopPropagation()
+            setRegistrarBio({ id: e.id, nombre: displayName(e), puesto: puestoNombre(e.idPuesto) })
+          }}
+          data-testid={`${TID}__btn-registrar-bio-${e.id}`}
+        >
+          <Icon icon="solar:fingerprint-bold" />
+        </Button>
+      )}
+      <Button
+        variant="ghost"
+        size="sm"
+        title="Ver ficha"
+        aria-label={`Ver ficha de ${displayName(e)}`}
+        onClick={(ev) => {
+          ev.stopPropagation()
+          navigate(`/empleados/${e.id}`)
+        }}
+      >
+        <Icon icon="solar:eye-linear" />
+        {!soloIcono && 'Ver'}
+      </Button>
+    </div>
+  )
 
   return (
     <div className="space-y-5">
@@ -405,111 +450,183 @@ export default function EmpleadosListPage() {
         </div>
       )}
 
-      <DataTable
-        minWidth="1060px"
-        footer={
-          !isLoading && !isError && filtered.length > PAGE_SIZE ? (
-            <Pagination page={safePage} pageSize={PAGE_SIZE} total={filtered.length} onPageChange={setPage} />
-          ) : undefined
-        }
-      >
-        <DataTableHead>
-          <DataTableHeadCell className="w-20">
-            <span title="Identificador interno del empleado en el sistema de RRHH. NO es el código del reloj.">
-              ID RRHH
-            </span>
-          </DataTableHeadCell>
-          <DataTableHeadCell>Nombre completo</DataTableHeadCell>
-          <DataTableHeadCell className="w-44">
-            <span title="Código con el que el empleado se busca y marca en el reloj biométrico (BioTime).">
-              Biométrico
-            </span>
-          </DataTableHeadCell>
-          <DataTableHeadCell>DPI</DataTableHeadCell>
-          <DataTableHeadCell>Empresa</DataTableHeadCell>
-          <DataTableHeadCell>Puesto</DataTableHeadCell>
-          <DataTableHeadCell className="text-right">Salario base</DataTableHeadCell>
-          <DataTableHeadCell>Ingreso</DataTableHeadCell>
-          <DataTableHeadCell>Estado</DataTableHeadCell>
-          <DataTableHeadCell className="w-28 text-right">
-            <span className="sr-only">Acciones</span>
-          </DataTableHeadCell>
-        </DataTableHead>
-        <DataTableBody>
-          {isLoading ? (
-            <DataTableSkeleton rows={6} cols={10} />
-          ) : isError ? (
-            <DataTableEmpty
-              colSpan={10}
-              icon="solar:danger-triangle-bold"
-              title="No se pudieron cargar los empleados"
-              description="Revisa la conexión e intenta recargar la página."
-            />
-          ) : pageItems.length === 0 ? (
-            <DataTableEmpty
-              colSpan={10}
-              icon="solar:users-group-rounded-linear"
-              title="Ningún empleado coincide con los filtros"
-              description="Prueba con otro nombre o DPI, o cambia el estado, el puesto o el biométrico."
-            />
-          ) : (
-            pageItems.map((e) => (
-              <DataTableRow key={e.id} onClick={() => navigate(`/empleados/${e.id}`)}>
-                <DataTableCell className="font-mono text-xs text-slate-400">{e.id}</DataTableCell>
-                <DataTableCell className="font-medium text-slate-900">{displayName(e)}</DataTableCell>
-                <DataTableCell>
-                  <BiometricoBadge info={bioDe(e)} />
-                </DataTableCell>
-                <DataTableCell className="font-mono text-xs text-slate-600">
-                  {e.numeroIdentificacionNacional ?? '—'}
-                </DataTableCell>
-                <DataTableCell className="text-slate-600">{empresaNombre(e.empresaId)}</DataTableCell>
-                <DataTableCell className="text-slate-600">{puestoNombre(e.idPuesto)}</DataTableCell>
-                <DataTableCell className="text-right tabular-nums text-slate-700">
-                  {e.salarioBaseContrato != null ? formatQ(e.salarioBaseContrato) : '—'}
-                </DataTableCell>
-                <DataTableCell className="tabular-nums text-slate-600">
-                  {formatDate(e.fechaContratacion)}
-                </DataTableCell>
-                <DataTableCell>
-                  <EmpleadoStatusBadge estado={e.estaActivo ? 'ACTIVO' : 'BAJA'} />
-                </DataTableCell>
-                <DataTableCell className="text-right">
-                  <div className="flex justify-end gap-1">
-                    {e.estaActivo && e.codigoEmpleadoBio == null && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-amber-700 hover:bg-amber-50 hover:text-amber-800"
-                        title="Registrar en el biométrico"
-                        aria-label={`Registrar a ${displayName(e)} en el biométrico`}
-                        onClick={(ev) => {
-                          ev.stopPropagation()
-                          setRegistrarBio({ id: e.id, nombre: displayName(e), puesto: puestoNombre(e.idPuesto) })
-                        }}
-                        data-testid={`${TID}__btn-registrar-bio-${e.id}`}
-                      >
-                        <Icon icon="solar:fingerprint-bold" />
-                      </Button>
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(ev) => {
-                        ev.stopPropagation()
-                        navigate(`/empleados/${e.id}`)
-                      }}
+      {/* Diseño según el ancho REAL disponible (la barra lateral cambia el espacio, no solo la pantalla):
+          ≥ 1320 px tabla completa · ≥ 940 px tabla compacta (DPI/empresa/ingreso bajo otras columnas) · menor: tarjetas. */}
+      <div ref={contenedorRef} data-testid={`${TID}__listado`} data-modo={modo}>
+        {modo === 'tarjetas' ? (
+          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            {isLoading ? (
+              <div className="grid gap-3 p-3 sm:grid-cols-2">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="h-40 animate-pulse rounded-xl bg-slate-100" />
+                ))}
+              </div>
+            ) : isError ? (
+              <EmptyState
+                icon="solar:danger-triangle-bold"
+                title="No se pudieron cargar los empleados"
+                description="Revisa la conexión e intenta recargar la página."
+              />
+            ) : pageItems.length === 0 ? (
+              <EmptyState
+                icon="solar:users-group-rounded-linear"
+                title="Ningún empleado coincide con los filtros"
+                description="Prueba con otro nombre o DPI, o cambia el estado, el puesto o el biométrico."
+              />
+            ) : (
+              <ul className={cn('grid gap-3 p-3', ancho >= 560 && 'grid-cols-2')}>
+                {pageItems.map((e) => (
+                  <li key={e.id}>
+                    <div
+                      role="link"
+                      tabIndex={0}
+                      onClick={() => navigate(`/empleados/${e.id}`)}
+                      onKeyDown={(ev) => ev.key === 'Enter' && navigate(`/empleados/${e.id}`)}
+                      className="flex h-full cursor-pointer flex-col gap-2.5 rounded-xl border border-slate-200 p-3.5 transition hover:border-slate-300 hover:bg-slate-50/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+                      data-testid={`${TID}__tarjeta-${e.id}`}
                     >
-                      <Icon icon="solar:eye-linear" />
-                      Ver
-                    </Button>
-                  </div>
-                </DataTableCell>
-              </DataTableRow>
-            ))
-          )}
-        </DataTableBody>
-      </DataTable>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="break-words font-semibold leading-snug text-slate-900">{displayName(e)}</div>
+                          <div className="mt-0.5 text-xs text-slate-500">
+                            <span className="font-mono">ID RRHH {e.id}</span>
+                            {e.numeroIdentificacionNacional && (
+                              <span className="font-mono"> · DPI {e.numeroIdentificacionNacional}</span>
+                            )}
+                          </div>
+                        </div>
+                        <EmpleadoStatusBadge estado={e.estaActivo ? 'ACTIVO' : 'BAJA'} />
+                      </div>
+                      <div className="text-sm text-slate-600">
+                        <div className="break-words">{puestoNombre(e.idPuesto)}</div>
+                        <div className="text-xs text-slate-500">{empresaNombre(e.empresaId)}</div>
+                      </div>
+                      <dl className="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <dt className="text-slate-400">Salario base</dt>
+                          <dd className="font-medium tabular-nums text-slate-700">
+                            {e.salarioBaseContrato != null ? formatQ(e.salarioBaseContrato) : '—'}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-slate-400">Ingreso</dt>
+                          <dd className="tabular-nums text-slate-700">{formatDate(e.fechaContratacion)}</dd>
+                        </div>
+                      </dl>
+                      <div className="mt-auto flex items-end justify-between gap-2 border-t border-slate-100 pt-2.5">
+                        <BiometricoBadge info={bioDe(e)} />
+                        {acciones(e, true)}
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {!isLoading && !isError && filtered.length > PAGE_SIZE && (
+              <Pagination page={safePage} pageSize={PAGE_SIZE} total={filtered.length} onPageChange={setPage} />
+            )}
+          </div>
+        ) : (
+          <DataTable
+            minWidth="0"
+            footer={
+              !isLoading && !isError && filtered.length > PAGE_SIZE ? (
+                <Pagination page={safePage} pageSize={PAGE_SIZE} total={filtered.length} onPageChange={setPage} />
+              ) : undefined
+            }
+          >
+            <DataTableHead>
+              <DataTableHeadCell className={cn('w-20 whitespace-nowrap', celda)}>
+                <span title="Identificador interno del empleado en el sistema de RRHH. NO es el código del reloj.">
+                  ID RRHH
+                </span>
+              </DataTableHeadCell>
+              <DataTableHeadCell className={celda}>{completa ? 'Nombre completo' : 'Empleado'}</DataTableHeadCell>
+              <DataTableHeadCell className={cn(completa ? 'min-w-[200px]' : 'min-w-[170px]', 'whitespace-nowrap', celda)}>
+                <span title="Código con el que el empleado se busca y marca en el reloj biométrico (BioTime).">
+                  Biométrico
+                </span>
+              </DataTableHeadCell>
+              {completa && <DataTableHeadCell className={celda}>DPI</DataTableHeadCell>}
+              {completa && <DataTableHeadCell className={celda}>Empresa</DataTableHeadCell>}
+              <DataTableHeadCell className={celda}>Puesto</DataTableHeadCell>
+              <DataTableHeadCell className={cn('whitespace-nowrap text-right', celda)}>Salario base</DataTableHeadCell>
+              {completa && <DataTableHeadCell className={celda}>Ingreso</DataTableHeadCell>}
+              <DataTableHeadCell className={celda}>Estado</DataTableHeadCell>
+              <DataTableHeadCell className={cn('text-right', completa ? 'w-28' : 'w-20', celda)}>
+                <span className="sr-only">Acciones</span>
+              </DataTableHeadCell>
+            </DataTableHead>
+            <DataTableBody>
+              {isLoading ? (
+                <DataTableSkeleton rows={6} cols={columnas} />
+              ) : isError ? (
+                <DataTableEmpty
+                  colSpan={columnas}
+                  icon="solar:danger-triangle-bold"
+                  title="No se pudieron cargar los empleados"
+                  description="Revisa la conexión e intenta recargar la página."
+                />
+              ) : pageItems.length === 0 ? (
+                <DataTableEmpty
+                  colSpan={columnas}
+                  icon="solar:users-group-rounded-linear"
+                  title="Ningún empleado coincide con los filtros"
+                  description="Prueba con otro nombre o DPI, o cambia el estado, el puesto o el biométrico."
+                />
+              ) : (
+                pageItems.map((e) => (
+                  <DataTableRow key={e.id} onClick={() => navigate(`/empleados/${e.id}`)}>
+                    <DataTableCell className={cn('whitespace-nowrap align-top font-mono text-xs text-slate-400', celda)}>
+                      {e.id}
+                    </DataTableCell>
+                    <DataTableCell className={cn('min-w-[180px] align-top', celda)}>
+                      <div className="break-words font-medium text-slate-900">{displayName(e)}</div>
+                      {!completa && e.numeroIdentificacionNacional && (
+                        <div className="mt-0.5 font-mono text-xs text-slate-500">DPI {e.numeroIdentificacionNacional}</div>
+                      )}
+                    </DataTableCell>
+                    <DataTableCell className={cn('align-top', celda)}>
+                      <BiometricoBadge info={bioDe(e)} />
+                    </DataTableCell>
+                    {completa && (
+                      <DataTableCell className={cn('whitespace-nowrap align-top font-mono text-xs text-slate-600', celda)}>
+                        {e.numeroIdentificacionNacional ?? '—'}
+                      </DataTableCell>
+                    )}
+                    {completa && (
+                      <DataTableCell className={cn('min-w-[120px] align-top text-slate-600', celda)}>
+                        {empresaNombre(e.empresaId)}
+                      </DataTableCell>
+                    )}
+                    <DataTableCell className={cn(completa ? 'min-w-[150px]' : 'min-w-[130px]', 'align-top text-slate-600', celda)}>
+                      <div className="break-words">{puestoNombre(e.idPuesto)}</div>
+                      {!completa && <div className="text-xs text-slate-400">{empresaNombre(e.empresaId)}</div>}
+                    </DataTableCell>
+                    <DataTableCell className={cn('whitespace-nowrap text-right align-top tabular-nums text-slate-700', celda)}>
+                      {e.salarioBaseContrato != null ? formatQ(e.salarioBaseContrato) : '—'}
+                    </DataTableCell>
+                    {completa && (
+                      <DataTableCell className={cn('whitespace-nowrap align-top tabular-nums text-slate-600', celda)}>
+                        {formatDate(e.fechaContratacion)}
+                      </DataTableCell>
+                    )}
+                    <DataTableCell className={cn('align-top', celda)}>
+                      <EmpleadoStatusBadge estado={e.estaActivo ? 'ACTIVO' : 'BAJA'} />
+                      {!completa && (
+                        <div className="mt-1 whitespace-nowrap text-[11px] tabular-nums text-slate-400">
+                          Ingreso {formatDate(e.fechaContratacion)}
+                        </div>
+                      )}
+                    </DataTableCell>
+                    <DataTableCell className={cn('text-right align-top', celda)}>{acciones(e, !completa)}</DataTableCell>
+                  </DataTableRow>
+                ))
+              )}
+            </DataTableBody>
+          </DataTable>
+        )}
+      </div>
 
       <RegistrarBiometricoDialog empleado={registrarBio} onClose={() => setRegistrarBio(null)} />
     </div>

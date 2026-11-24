@@ -14,7 +14,7 @@ function Chip({ tono, icon, children, title }: { tono: keyof typeof TONO; icon: 
   return (
     <span
       title={title}
-      className={cn('inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs font-semibold', TONO[tono])}
+      className={cn('inline-flex items-center gap-1 whitespace-nowrap rounded-md border px-1.5 py-0.5 text-xs font-semibold', TONO[tono])}
     >
       <Icon icon={icon} width={12} className="shrink-0" />
       {children}
@@ -76,13 +76,13 @@ export function BiometricoBadge({ info, className }: { info: InfoBiometrico; cla
         </div>
       )}
       {estado === 'FALTA_HUELLA' && (
-        <div className="flex items-center gap-1 text-[11px] font-medium text-sky-700">
+        <div className="flex items-center gap-1 whitespace-nowrap text-[11px] font-medium text-sky-700">
           <Icon icon="solar:clock-circle-linear" width={11} />
           Falta huella en el reloj
         </div>
       )}
       {estado === 'NO_EN_BIOTIME' && (
-        <div className="flex items-center gap-1 text-[11px] font-medium text-rose-700">
+        <div className="flex items-center gap-1 whitespace-nowrap text-[11px] font-medium text-rose-700">
           <Icon icon="solar:danger-triangle-linear" width={11} />
           {huella?.eliminadoEnBiotime ? 'Eliminado en BioTime' : 'Código no existe en BioTime'}
         </div>
