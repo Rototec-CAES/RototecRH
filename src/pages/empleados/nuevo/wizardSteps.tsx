@@ -165,6 +165,7 @@ export function StepContent({ index }: { index: number }) {
             label={docs.identificacion}
             required
             placeholder={paisKey === 'GT' ? '13 dígitos' : undefined}
+            sanitize={paisKey === 'GT' ? (v) => v.replace(/[\s-]/g, '') : undefined}
           />
           <TextField name="id_tributario" label={docs.tributario} required />
           <TextField name="id_seguro_social" label={docs.seguroSocial} required />

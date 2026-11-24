@@ -52,6 +52,7 @@ export function TextField({
   placeholder,
   disabled,
   step,
+  sanitize,
 }: {
   name: Name
   label: string
@@ -61,12 +62,15 @@ export function TextField({
   disabled?: boolean
   /** Solo para type="number". Sin esto el navegador usa step=1 y rechaza decimales. */
   step?: string
+  /** Limpia el texto mientras se escribe o pega (p. ej. quitar espacios del DPI). */
+  sanitize?: (value: string) => string
 }) {
   const {
     register,
     formState: { errors },
   } = useFormContext<EmpleadoCreateValues>()
   const err = errors[name]?.message as string | undefined
+  const field = register(name, type === 'number' ? { valueAsNumber: true } : {})
   return (
     <FieldShell label={label} required={required} error={err}>
       <Input
@@ -76,7 +80,11 @@ export function TextField({
         disabled={disabled}
         aria-invalid={!!err}
         className={cn(err && 'border-red-400 bg-red-50/40 focus-visible:ring-red-500')}
-        {...register(name, type === 'number' ? { valueAsNumber: true } : {})}
+        {...field}
+        onChange={(e) => {
+          if (sanitize) e.target.value = sanitize(e.target.value)
+          return field.onChange(e)
+        }}
       />
     </FieldShell>
   )
