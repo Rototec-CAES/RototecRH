@@ -47,3 +47,59 @@
 ::-webkit-scrollbar-track    { background: transparent; }
 ::-webkit-scrollbar-thumb    { background: #cbd5e1; border-radius: 99px; }
 ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* ── Organigrama (Organización): conectores tipo árbol hacia abajo ── */
+.org-tree { --org-line: #cbd5e1; --org-gap: 1.5rem; }
+.org-tree ul {
+  display: flex;
+  justify-content: center;
+  position: relative;
+  padding-top: var(--org-gap);
+}
+.org-tree li {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--org-gap) 0.5rem 0;
+}
+/* Línea horizontal (mitad izquierda / derecha) + bajada al hijo */
+.org-tree li::before,
+.org-tree li::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 50%;
+  width: 50%;
+  height: var(--org-gap);
+  border-top: 2px solid var(--org-line);
+}
+.org-tree li::after {
+  right: auto;
+  left: 50%;
+  border-left: 2px solid var(--org-line);
+}
+.org-tree li:only-child::before { display: none; }
+.org-tree li:only-child::after { border-top: 0; }
+.org-tree li:first-child::before,
+.org-tree li:last-child::after { border-top: 0; }
+.org-tree li:last-child:not(:only-child)::before {
+  border-right: 2px solid var(--org-line);
+  border-top-right-radius: 10px;
+}
+.org-tree li:first-child:not(:only-child)::after { border-top-left-radius: 10px; }
+.org-tree li:last-child:not(:only-child)::after { border-left: 0; }
+/* Bajada desde el padre */
+.org-tree ul ul::before,
+.org-tree .org-root > ul::before,
+.org-tree .org-leaves::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  height: var(--org-gap);
+  border-left: 2px solid var(--org-line);
+}
+.org-tree .org-root { display: flex; flex-direction: column; align-items: center; }
+.org-tree .org-leaves { position: relative; display: flex; flex-direction: column; align-items: center; padding-top: var(--org-gap); }
+.org-tree .org-leaf-link { width: 2px; height: 0.625rem; background: var(--org-line); }

@@ -5,6 +5,8 @@ import type {
   DepartamentoUpdate,
   PuestoInput,
   PuestoUpdate,
+  RecursoAsignadoInput,
+  RecursoCatalogoInput,
   SubDepartamentoInput,
   SubDepartamentoUpdate,
 } from '@/api/estructura'
@@ -91,6 +93,34 @@ export function useEliminarPuesto() {
   const invalidar = useInvalidar()
   return useMutation({
     mutationFn: (id: number) => estructuraApi.eliminarPuesto(id),
+    onSuccess: invalidar,
+  })
+}
+
+// ── Recursos por puesto (equipos / accesos, informativo) ──
+const QK_CATALOGO = ['estructura-recursos-catalogo'] as const
+
+export const useCatalogoRecursos = (enabled = true) =>
+  useQuery({
+    queryKey: QK_CATALOGO,
+    queryFn: () => estructuraApi.catalogoRecursos(),
+    enabled,
+    staleTime: 5 * 60_000,
+  })
+
+export function useCrearRecursoCatalogo() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: RecursoCatalogoInput) => estructuraApi.crearRecursoCatalogo(input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: QK_CATALOGO }),
+  })
+}
+
+export function useGuardarRecursosPuesto() {
+  const invalidar = useInvalidar()
+  return useMutation({
+    mutationFn: ({ idPuesto, recursos }: { idPuesto: number; recursos: RecursoAsignadoInput[] }) =>
+      estructuraApi.guardarRecursosPuesto(idPuesto, recursos),
     onSuccess: invalidar,
   })
 }

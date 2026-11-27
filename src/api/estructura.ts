@@ -1,10 +1,32 @@
 import { rrhhApi, USE_MOCK } from './client'
 
 // ── Árbol que devuelve GET /rrhh/organizacion/arbol/:empresaId ──
+export type TipoRecurso = 'EQUIPO' | 'ACCESO'
+export interface RecursoCatalogo {
+  id: number
+  tipo: TipoRecurso
+  nombre: string
+  icono: string | null
+}
+/** Equipo o acceso asignado a un puesto (informativo). */
+export interface RecursoPuesto extends RecursoCatalogo {
+  cantidad: number
+}
+export interface RecursoAsignadoInput {
+  idRecurso: number
+  cantidad: number
+}
+export interface RecursoCatalogoInput {
+  tipo: TipoRecurso
+  nombre: string
+  icono?: string
+}
+
 export interface PuestoNodo {
   id: number
   nombre: string
   codigoBiotime: number | null
+  recursos: RecursoPuesto[]
 }
 export interface SubDepartamentoNodo {
   id: number
@@ -88,6 +110,19 @@ const realApi = {
     const { data } = await rrhhApi.delete<Ok>(`/organizacion/puestos/${id}`)
     return data
   },
+  // ── Recursos por puesto (equipos / accesos) ──
+  async catalogoRecursos(): Promise<RecursoCatalogo[]> {
+    const { data } = await rrhhApi.get<RecursoCatalogo[]>('/organizacion/recursos-catalogo')
+    return data
+  },
+  async crearRecursoCatalogo(input: RecursoCatalogoInput): Promise<RecursoCatalogo> {
+    const { data } = await rrhhApi.post<RecursoCatalogo>('/organizacion/recursos-catalogo', input)
+    return data
+  },
+  async guardarRecursosPuesto(idPuesto: number, recursos: RecursoAsignadoInput[]): Promise<RecursoPuesto[]> {
+    const { data } = await rrhhApi.put<RecursoPuesto[]>(`/organizacion/puestos/${idPuesto}/recursos`, { recursos })
+    return data
+  },
 }
 
 const mockApi: typeof realApi = {
@@ -120,6 +155,15 @@ const mockApi: typeof realApi = {
   },
   async eliminarPuesto(id) {
     return { id }
+  },
+  async catalogoRecursos() {
+    return []
+  },
+  async crearRecursoCatalogo(input) {
+    return { id: Date.now(), tipo: input.tipo, nombre: input.nombre, icono: input.icono ?? null }
+  },
+  async guardarRecursosPuesto() {
+    return []
   },
 }
 
