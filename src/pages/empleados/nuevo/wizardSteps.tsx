@@ -25,6 +25,7 @@ import { posicionBiotimePorNombre } from '@/lib/biometrico'
 import type { EmpleadoCreateValues } from '@/lib/validators'
 import { CheckboxField, DocumentoIdentidadField, SelectField, TextField, type Opt } from './fields'
 import { documentoIdentidad } from '@/lib/documentosPais'
+import { usePermisos } from '@/hooks/usePermisos'
 
 export const WIZARD_STEPS = [
   { id: 'pais', title: 'País' },
@@ -87,6 +88,7 @@ export function StepContent({ index }: { index: number }) {
   const departamentoId = numOrUndef(watch('id_departamento'))
   const subDepId = numOrUndef(watch('id_sub_departamento'))
   const esTransferencia = watch('forma_pago') === 'TRANSFERENCIA'
+  const verSueldos = usePermisos().puede('rrhh.empleados', 'ver_salarios')
 
   const paises = usePaises()
   const paisId = paises.data?.find((p) => p.codigo === paisKey)?.id
@@ -215,7 +217,9 @@ export function StepContent({ index }: { index: number }) {
           <SelectField name="tipo_contrato" label="Tipo de contrato" required options={tiposContrato} />
           <TextField name="fecha_contratacion" label="Fecha de ingreso" required type="date" />
           <TextField name="fecha_reingreso" label="Fecha de reingreso" type="date" />
-          <TextField name="salario_base_contrato" label="Salario base (Q)" required type="number" step="0.01" />
+          {verSueldos && (
+            <TextField name="salario_base_contrato" label="Salario base (Q)" required type="number" step="0.01" />
+          )}
           <TextField name="profesion" label="Profesión" />
           <TextField name="titulo" label="Título / diploma" />
           <SelectField name="forma_pago" label="Forma de pago" required options={formasPago} />

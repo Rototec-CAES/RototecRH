@@ -27,10 +27,13 @@ import { notify } from '@/lib/notify'
 import { cn } from '@/lib/utils'
 import { NodoDialog, type NodoDialogState } from './NodoDialog'
 import { ICONO_DEFAULT, RecursosPuestoDialog } from './RecursosPuestoDialog'
+import { usePermisos } from '@/hooks/usePermisos'
 
 const TID = 'rh-organizacion'
 
 interface TreeApi {
+  /** Qué puede hacer el usuario en Organización (permisos t2 'rrhh.organizacion'). */
+  perm: { crear: boolean; editar: boolean; eliminar: boolean }
   openDeptos: Set<number>
   openSubs: Set<number>
   toggleDepto: (id: number) => void
@@ -58,6 +61,12 @@ export default function OrganizacionPage() {
   const [openSubs, setOpenSubs] = useState<Set<number>>(new Set())
   const [dialog, setDialog] = useState<NodoDialogState>(DIALOG_INICIAL)
   const [puestoConfigId, setPuestoConfigId] = useState<number | null>(null)
+  const { puede } = usePermisos()
+  const perm = {
+    crear: puede('rrhh.organizacion', 'crear'),
+    editar: puede('rrhh.organizacion', 'editar'),
+    eliminar: puede('rrhh.organizacion', 'eliminar'),
+  }
 
   const { data: arbol, isLoading } = useArbolEmpresa(empresaId)
   const delDepto = useEliminarDepartamento()
@@ -132,6 +141,7 @@ export default function OrganizacionPage() {
   }
 
   const api: TreeApi = {
+    perm,
     openDeptos,
     openSubs,
     toggleDepto: (id) => toggle(setOpenDeptos, id),
@@ -170,6 +180,19 @@ export default function OrganizacionPage() {
     setOpenSubs(new Set())
   }
 
+  const accionesArbol = (
+    <div className="flex items-center gap-1.5">
+      <Button size="sm" variant="outline" onClick={expandirTodo} data-testid={`${TID}__btn-expandir`}>
+        <Icon icon="solar:maximize-square-minimalistic-linear" width={15} />
+        Expandir todo
+      </Button>
+      <Button size="sm" variant="outline" onClick={contraerTodo} data-testid={`${TID}__btn-contraer`}>
+        <Icon icon="solar:minimize-square-minimalistic-linear" width={15} />
+        Contraer
+      </Button>
+    </div>
+  )
+
   return (
     <div className="space-y-5">
       {/* Encabezado + filtros */}
@@ -179,10 +202,12 @@ export default function OrganizacionPage() {
           icono="solar:structure-bold"
           descripcion="Organigrama de departamentos, sub-departamentos y puestos de cada empresa. Solo se pueden eliminar las ramas que no tienen nada adentro."
         >
-          <Button disabled={!empresaId} onClick={nuevoDepto} data-testid={`${TID}__btn-nuevo-depto`}>
-            <Icon icon="solar:add-circle-bold" width={16} />
-            Nuevo departamento
-          </Button>
+          {perm.crear && (
+            <Button disabled={!empresaId} onClick={nuevoDepto} data-testid={`${TID}__btn-nuevo-depto`}>
+              <Icon icon="solar:add-circle-bold" width={16} />
+              Nuevo departamento
+            </Button>
+          )}
         </PageHeader>
 
         <div className="mt-4 flex flex-wrap items-end gap-3 border-t border-dashed border-slate-200 pt-4">
@@ -238,20 +263,7 @@ export default function OrganizacionPage() {
       <Panel
         title={empresaNombre ? `Organigrama de ${empresaNombre}` : 'Organigrama'}
         subtitle="Haz clic en un departamento o sub-departamento para desplegar lo que tiene debajo. El engrane de cada puesto configura sus equipos y accesos."
-        right={
-          empresaId && arbol?.length ? (
-            <div className="flex items-center gap-1.5">
-              <Button size="sm" variant="outline" onClick={expandirTodo} data-testid={`${TID}__btn-expandir`}>
-                <Icon icon="solar:maximize-square-minimalistic-linear" width={15} />
-                Expandir todo
-              </Button>
-              <Button size="sm" variant="outline" onClick={contraerTodo} data-testid={`${TID}__btn-contraer`}>
-                <Icon icon="solar:minimize-square-minimalistic-linear" width={15} />
-                Contraer
-              </Button>
-            </div>
-          ) : undefined
-        }
+        right={empresaId && arbol?.length ? accionesArbol : undefined}
       >
         {!empresaId ? (
           <EmptyState
@@ -269,19 +281,24 @@ export default function OrganizacionPage() {
             </div>
           </div>
         ) : (
-          <OrgCanvas>
+          <OrgCanvas
+            titulo={empresaNombre ? `Organigrama de ${empresaNombre}` : 'Organigrama'}
+            acciones={arbol?.length ? accionesArbol : undefined}
+          >
             <div className="org-root">
-              <EmpresaCard nombre={empresaNombre ?? 'Empresa'} totales={totales} onNuevoDepto={nuevoDepto} />
+              <EmpresaCard nombre={empresaNombre ?? 'Empresa'} totales={totales} onNuevoDepto={perm.crear ? nuevoDepto : undefined} />
               {arbol?.length ? (
                 <ul>
                   {arbol.map((d, i) => (
                     <DepartamentoNode key={d.id} depto={d} api={api} index={i} />
                   ))}
                 </ul>
-              ) : (
+              ) : perm.crear ? (
                 <div className="org-leaves">
                   <AddCard label="Crear el primer departamento" onClick={nuevoDepto} />
                 </div>
+              ) : (
+                <p className="mt-6 text-center text-sm text-slate-400">Esta empresa todavía no tiene departamentos.</p>
               )}
             </div>
           </OrgCanvas>
@@ -289,7 +306,11 @@ export default function OrganizacionPage() {
       </Panel>
 
       <NodoDialog state={dialog} onOpenChange={(open) => setDialog((s) => ({ ...s, open }))} />
-      <RecursosPuestoDialog puesto={puestoConfig} onOpenChange={(open) => !open && setPuestoConfigId(null)} />
+      <RecursosPuestoDialog
+        puesto={puestoConfig}
+        soloLectura={!perm.editar}
+        onOpenChange={(open) => !open && setPuestoConfigId(null)}
+      />
     </div>
   )
 }
@@ -298,11 +319,37 @@ export default function OrganizacionPage() {
 
 const ZOOMS = [0.6, 0.75, 0.9, 1, 1.1] as const
 
-function OrgCanvas({ children }: { children: React.ReactNode }) {
+function OrgCanvas({
+  titulo,
+  acciones,
+  children,
+}: {
+  titulo: string
+  acciones?: React.ReactNode
+  children: React.ReactNode
+}) {
   const ref = useRef<HTMLDivElement>(null)
   const drag = useRef<{ x: number; y: number; left: number; top: number } | null>(null)
   const [zoomIdx, setZoomIdx] = useState(3)
   const [arrastrando, setArrastrando] = useState(false)
+  // Pantalla completa como capa fija (no la Fullscreen API del navegador): así los diálogos,
+  // que se montan en <body>, siguen viéndose encima del organigrama.
+  const [completa, setCompleta] = useState(false)
+
+  useEffect(() => {
+    if (!completa) return
+    const overflowPrevio = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const onKey = (e: KeyboardEvent) => {
+      // Si hay un diálogo abierto, Esc es para cerrarlo a él, no para salir de pantalla completa.
+      if (e.key === 'Escape' && !document.querySelector('[role="dialog"], [role="alertdialog"]')) setCompleta(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => {
+      document.body.style.overflow = overflowPrevio
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [completa])
 
   // Arrastrar el fondo para moverse (los clics en tarjetas/botones no inician arrastre).
   function onPointerDown(e: React.PointerEvent) {
@@ -325,7 +372,26 @@ function OrgCanvas({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="relative">
+    <div
+      className={cn(
+        completa ? 'fixed inset-0 z-40 flex flex-col gap-3 bg-white p-3 sm:p-4 animate-in fade-in duration-150' : 'relative',
+      )}
+      data-testid={`${TID}__organigrama-contenedor`}
+    >
+      {completa && (
+        <div className="flex items-center gap-2 pr-1">
+          <span className="grid h-8 w-8 place-items-center rounded-xl bg-slate-100 text-slate-600">
+            <Icon icon="solar:structure-bold" width={16} />
+          </span>
+          <h2 className="min-w-0 flex-1 truncate text-base font-semibold text-slate-900">{titulo}</h2>
+          <div className="hidden sm:block">{acciones}</div>
+          <Button size="sm" variant="outline" onClick={() => setCompleta(false)} data-testid={`${TID}__btn-salir-completa`}>
+            <Icon icon="solar:quit-full-screen-linear" width={15} />
+            Salir <span className="hidden text-slate-400 sm:inline">(Esc)</span>
+          </Button>
+        </div>
+      )}
+      <div className={cn('relative', completa && 'flex min-h-0 flex-1 flex-col')}>
       <div className="absolute right-2 top-2 z-10 flex items-center gap-0.5 rounded-lg border border-slate-200 bg-white/90 p-0.5 shadow-sm backdrop-blur">
         <button
           type="button"
@@ -350,6 +416,17 @@ function OrgCanvas({ children }: { children: React.ReactNode }) {
         >
           <Icon icon="solar:add-circle-linear" width={16} />
         </button>
+        <span className="mx-0.5 h-4 w-px bg-slate-200" />
+        <button
+          type="button"
+          onClick={() => setCompleta((v) => !v)}
+          className="grid h-7 w-7 place-items-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+          aria-label={completa ? 'Salir de pantalla completa' : 'Ver en pantalla completa'}
+          title={completa ? 'Salir de pantalla completa (Esc)' : 'Ver en pantalla completa'}
+          data-testid={`${TID}__btn-pantalla-completa`}
+        >
+          <Icon icon={completa ? 'solar:quit-full-screen-linear' : 'solar:full-screen-linear'} width={16} />
+        </button>
       </div>
       <div
         ref={ref}
@@ -358,7 +435,8 @@ function OrgCanvas({ children }: { children: React.ReactNode }) {
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
         className={cn(
-          'max-h-[75vh] min-h-[22rem] overflow-auto rounded-xl border border-slate-100 bg-slate-50/60 bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:18px_18px]',
+          'overflow-auto rounded-xl border border-slate-100 bg-slate-50/60 bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:18px_18px]',
+          completa ? 'min-h-0 flex-1' : 'max-h-[75vh] min-h-[22rem]',
           arrastrando ? 'cursor-grabbing select-none' : 'cursor-grab',
         )}
         data-testid={`${TID}__organigrama`}
@@ -366,6 +444,7 @@ function OrgCanvas({ children }: { children: React.ReactNode }) {
         <div className="org-tree mx-auto w-max min-w-full px-6 pb-10 pt-6" style={{ zoom: ZOOMS[zoomIdx] }}>
           {children}
         </div>
+      </div>
       </div>
     </div>
   )
@@ -380,7 +459,7 @@ function EmpresaCard({
 }: {
   nombre: string
   totales: { deptos: number; subs: number; puestos: number }
-  onNuevoDepto: () => void
+  onNuevoDepto?: () => void
 }) {
   return (
     <div className="flex w-64 flex-col items-center gap-2 rounded-2xl bg-slate-900 px-4 py-3.5 text-center text-white shadow-lg shadow-slate-900/20">
@@ -391,14 +470,16 @@ function EmpresaCard({
       <div className="text-[11px] text-slate-300 tabular-nums">
         {totales.deptos} deptos · {totales.subs} sub-deptos · {totales.puestos} puestos
       </div>
-      <button
-        type="button"
-        onClick={onNuevoDepto}
-        className="mt-0.5 flex items-center gap-1 rounded-lg bg-white/10 px-2.5 py-1 text-[11px] font-semibold transition-colors hover:bg-white/20"
-      >
-        <Icon icon="solar:add-circle-linear" width={14} />
-        Departamento
-      </button>
+      {onNuevoDepto && (
+        <button
+          type="button"
+          onClick={onNuevoDepto}
+          className="mt-0.5 flex items-center gap-1 rounded-lg bg-white/10 px-2.5 py-1 text-[11px] font-semibold transition-colors hover:bg-white/20"
+        >
+          <Icon icon="solar:add-circle-linear" width={14} />
+          Departamento
+        </button>
+      )}
     </div>
   )
 }
@@ -418,10 +499,10 @@ function DepartamentoNode({ depto, api, index }: { depto: DepartamentoNodo; api:
         contador={`${depto.subdepartamentos.length} ${depto.subdepartamentos.length === 1 ? 'sub-depto' : 'sub-deptos'}`}
         open={open}
         onToggle={() => api.toggleDepto(depto.id)}
-        onAdd={() => api.nuevoSub(depto.id)}
+        onAdd={api.perm.crear ? () => api.nuevoSub(depto.id) : undefined}
         addLabel="sub-departamento"
-        onEdit={() => api.editarDepartamento(depto)}
-        onDelete={() => api.eliminarDepartamento(depto)}
+        onEdit={api.perm.editar ? () => api.editarDepartamento(depto) : undefined}
+        onDelete={api.perm.eliminar ? () => api.eliminarDepartamento(depto) : undefined}
         tipo="departamento"
       />
       {open && (
@@ -429,7 +510,7 @@ function DepartamentoNode({ depto, api, index }: { depto: DepartamentoNodo; api:
           {depto.subdepartamentos.map((s) => (
             <SubNode key={s.id} sub={s} api={api} />
           ))}
-          {!depto.subdepartamentos.length && (
+          {!depto.subdepartamentos.length && api.perm.crear && (
             <li>
               <AddCard label="Agregar sub-departamento" onClick={() => api.nuevoSub(depto.id)} />
             </li>
@@ -451,10 +532,10 @@ function SubNode({ sub, api }: { sub: SubDepartamentoNodo; api: TreeApi }) {
         contador={`${sub.puestos.length} ${sub.puestos.length === 1 ? 'puesto' : 'puestos'}`}
         open={open}
         onToggle={() => api.toggleSub(sub.id)}
-        onAdd={() => api.nuevoPuesto(sub.id)}
+        onAdd={api.perm.crear ? () => api.nuevoPuesto(sub.id) : undefined}
         addLabel="puesto"
-        onEdit={() => api.editarSub(sub)}
-        onDelete={() => api.eliminarSub(sub)}
+        onEdit={api.perm.editar ? () => api.editarSub(sub) : undefined}
+        onDelete={api.perm.eliminar ? () => api.eliminarSub(sub) : undefined}
         tipo="sub-departamento"
       />
       {open && (
@@ -466,8 +547,13 @@ function SubNode({ sub, api }: { sub: SubDepartamentoNodo; api: TreeApi }) {
               <PuestoCard puesto={p} api={api} />
             </div>
           ))}
-          {sub.puestos.length > 0 && <span className="org-leaf-link" />}
-          <AddCard label="Agregar puesto" onClick={() => api.nuevoPuesto(sub.id)} compact />
+          {api.perm.crear && (
+            <>
+              {sub.puestos.length > 0 && <span className="org-leaf-link" />}
+              <AddCard label="Agregar puesto" onClick={() => api.nuevoPuesto(sub.id)} compact />
+            </>
+          )}
+          {!sub.puestos.length && !api.perm.crear && <p className="w-52 text-center text-xs text-slate-400">Sin puestos</p>}
         </div>
       )}
     </li>
@@ -500,10 +586,10 @@ function NodeCard({
   contador: string
   open: boolean
   onToggle: () => void
-  onAdd: () => void
+  onAdd?: () => void
   addLabel: string
-  onEdit: () => void
-  onDelete: () => void
+  onEdit?: () => void
+  onDelete?: () => void
   tipo: string
 }) {
   const t = TONES[tone]
@@ -541,9 +627,9 @@ function NodeCard({
         </span>
       </button>
       <div className="absolute right-1.5 top-2 flex flex-col gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
-        <MiniAction icon="solar:add-circle-bold" label={`Agregar ${addLabel}`} onClick={onAdd} hover="hover:bg-sky-50 hover:text-sky-600" />
-        <MiniAction icon="solar:pen-bold" label={`Editar ${tipo}`} onClick={onEdit} hover="hover:bg-sky-50 hover:text-sky-600" />
-        <MiniAction icon="solar:trash-bin-trash-bold" label={`Eliminar ${tipo}`} onClick={onDelete} hover="hover:bg-rose-50 hover:text-rose-600" />
+        {onAdd && <MiniAction icon="solar:add-circle-bold" label={`Agregar ${addLabel}`} onClick={onAdd} hover="hover:bg-sky-50 hover:text-sky-600" />}
+        {onEdit && <MiniAction icon="solar:pen-bold" label={`Editar ${tipo}`} onClick={onEdit} hover="hover:bg-sky-50 hover:text-sky-600" />}
+        {onDelete && <MiniAction icon="solar:trash-bin-trash-bold" label={`Eliminar ${tipo}`} onClick={onDelete} hover="hover:bg-rose-50 hover:text-rose-600" />}
       </div>
     </div>
   )
@@ -611,10 +697,16 @@ function PuestoCard({ puesto, api }: { puesto: PuestoNodo; api: TreeApi }) {
         </div>
       )}
 
-      <div className="absolute -right-2 -top-2 flex gap-0.5 rounded-lg bg-white p-0.5 opacity-0 shadow ring-1 ring-slate-200 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
-        <MiniAction icon="solar:pen-bold" label="Editar puesto" onClick={() => api.editarPuesto(puesto)} hover="hover:bg-sky-50 hover:text-sky-600" />
-        <MiniAction icon="solar:trash-bin-trash-bold" label="Eliminar puesto" onClick={() => api.eliminarPuesto(puesto)} hover="hover:bg-rose-50 hover:text-rose-600" />
-      </div>
+      {(api.perm.editar || api.perm.eliminar) && (
+        <div className="absolute -right-2 -top-2 flex gap-0.5 rounded-lg bg-white p-0.5 opacity-0 shadow ring-1 ring-slate-200 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+          {api.perm.editar && (
+            <MiniAction icon="solar:pen-bold" label="Editar puesto" onClick={() => api.editarPuesto(puesto)} hover="hover:bg-sky-50 hover:text-sky-600" />
+          )}
+          {api.perm.eliminar && (
+            <MiniAction icon="solar:trash-bin-trash-bold" label="Eliminar puesto" onClick={() => api.eliminarPuesto(puesto)} hover="hover:bg-rose-50 hover:text-rose-600" />
+          )}
+        </div>
+      )}
     </div>
   )
 }

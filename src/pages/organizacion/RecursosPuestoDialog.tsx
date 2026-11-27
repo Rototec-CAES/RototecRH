@@ -78,10 +78,12 @@ const SECCION: Record<TipoRecurso, { titulo: string; ayuda: string; icono: strin
 
 interface Props {
   puesto: PuestoNodo | null
+  /** Sin permiso de editar Organización: solo ver lo configurado. */
+  soloLectura?: boolean
   onOpenChange: (open: boolean) => void
 }
 
-export function RecursosPuestoDialog({ puesto, onOpenChange }: Props) {
+export function RecursosPuestoDialog({ puesto, soloLectura = false, onOpenChange }: Props) {
   const open = puesto != null
   const { data: catalogo, isLoading } = useCatalogoRecursos(open)
   const guardar = useGuardarRecursosPuesto()
@@ -152,7 +154,8 @@ export function RecursosPuestoDialog({ puesto, onOpenChange }: Props) {
               <Seccion
                 key={tipo}
                 tipo={tipo}
-                items={porTipo[tipo]}
+                soloLectura={soloLectura}
+                items={soloLectura ? porTipo[tipo].filter((r) => sel.has(r.id)) : porTipo[tipo]}
                 sel={sel}
                 onToggle={toggle}
                 onCantidad={setCantidad}
@@ -164,8 +167,9 @@ export function RecursosPuestoDialog({ puesto, onOpenChange }: Props) {
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancelar
+            {soloLectura ? 'Cerrar' : 'Cancelar'}
           </Button>
+          {!soloLectura && (
           <Button onClick={onGuardar} disabled={guardar.isPending || isLoading} data-testid={`${TID}__btn-guardar`}>
             {guardar.isPending ? (
               <Icon icon="svg-spinners:180-ring" width={16} />
@@ -174,6 +178,7 @@ export function RecursosPuestoDialog({ puesto, onOpenChange }: Props) {
             )}
             Guardar
           </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -182,6 +187,7 @@ export function RecursosPuestoDialog({ puesto, onOpenChange }: Props) {
 
 function Seccion({
   tipo,
+  soloLectura,
   items,
   sel,
   onToggle,
@@ -189,6 +195,7 @@ function Seccion({
   onCreado,
 }: {
   tipo: TipoRecurso
+  soloLectura: boolean
   items: RecursoCatalogo[]
   sel: Map<number, number>
   onToggle: (id: number) => void
@@ -240,7 +247,8 @@ function Seccion({
             >
               <button
                 type="button"
-                onClick={() => onToggle(r.id)}
+                onClick={() => !soloLectura && onToggle(r.id)}
+                disabled={soloLectura}
                 aria-pressed={activo}
                 className={cn(
                   'flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium',
@@ -251,7 +259,10 @@ function Seccion({
                 {r.nombre}
                 {activo && <Icon icon="solar:check-circle-bold" width={13} />}
               </button>
-              {activo && tipo === 'EQUIPO' && (
+              {activo && tipo === 'EQUIPO' && soloLectura && (sel.get(r.id) ?? 1) > 1 && (
+                <span className="border-l border-violet-200 px-2 text-xs font-semibold tabular-nums text-violet-700">×{sel.get(r.id)}</span>
+              )}
+              {activo && tipo === 'EQUIPO' && !soloLectura && (
                 <div className="flex items-center border-l border-violet-200 pr-1 text-violet-700">
                   <button
                     type="button"
@@ -275,9 +286,12 @@ function Seccion({
             </div>
           )
         })}
-        {!items.length && <span className="text-xs text-slate-400">Aún no hay opciones; agrega la primera.</span>}
+        {!items.length && (
+          <span className="text-xs text-slate-400">{soloLectura ? 'Ninguno.' : 'Aún no hay opciones; agrega la primera.'}</span>
+        )}
       </div>
 
+      {!soloLectura && (
       <form
         className="mt-2 flex gap-1.5"
         onSubmit={(e) => {
@@ -298,6 +312,7 @@ function Seccion({
           Agregar
         </Button>
       </form>
+      )}
     </section>
   )
 }

@@ -73,9 +73,17 @@ function armar(faltan: CampoFicha[]): FaltantesFicha {
 }
 
 /** Faltantes según los valores del FORMULARIO (pantalla de edición, en vivo). */
-export function faltantesDesdeFormulario(valores: Partial<EmpleadoCreateValues>): FaltantesFicha {
-  return armar(CAMPOS_FICHA.filter((c) => vacioFicha(valores[c.form])))
+export function faltantesDesdeFormulario(
+  valores: Partial<EmpleadoCreateValues>,
+  opciones: { sinSueldos?: boolean } = {},
+): FaltantesFicha {
+  return armar(
+    CAMPOS_FICHA.filter((c) => !(opciones.sinSueldos && CAMPOS_SUELDO.has(c.form)) && vacioFicha(valores[c.form])),
+  )
 }
+
+/** Campos de sueldo: quien no tiene permiso de sueldos no los ve, así que no cuentan como faltantes. */
+const CAMPOS_SUELDO = new Set<string>(['salario_base_contrato', 'bonificacion_decreto_base_contrato'])
 
 /** Puesto con su ubicación en la estructura (GET /organizacion/puestos). */
 export interface PuestoUbicacion {
@@ -105,7 +113,11 @@ export function ubicacionDesdePuesto(
  * - El nombre/apellido separados no cuentan si existe el completo (la edición los separa sola).
  * - El sub-departamento no cuenta si se deduce del puesto (la edición lo completa sola).
  */
-export function faltantesDesdeEmpleado(e: object, puestos?: PuestoUbicacion[]): FaltantesFicha {
+export function faltantesDesdeEmpleado(
+  e: object,
+  puestos?: PuestoUbicacion[],
+  opciones: { sinSueldos?: boolean } = {},
+): FaltantesFicha {
   const r = e as Record<string, unknown>
   const deducible = ubicacionDesdePuesto(
     r.idPuesto as number | null,
@@ -114,6 +126,7 @@ export function faltantesDesdeEmpleado(e: object, puestos?: PuestoUbicacion[]): 
   )
   return armar(
     CAMPOS_FICHA.filter((c) => {
+      if (opciones.sinSueldos && CAMPOS_SUELDO.has(c.form)) return false
       if (!vacioFicha(r[c.api])) return false
       if (c.form === 'primer_nombre') return vacioFicha(r.nombre)
       if (c.form === 'primer_apellido') return vacioFicha(r.apellido)

@@ -2,6 +2,7 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Icon } from '@iconify/react'
 import { useAuth } from '@/hooks/useAuth'
+import { usePermisos } from '@/hooks/usePermisos'
 import { useUiStore } from '@/stores/ui.store'
 import { cn, getInitials } from '@/lib/utils'
 import { NAV_SECTIONS, type NavItemDef } from './navigation'
@@ -31,7 +32,12 @@ function NavItem({ item, collapsed }: { item: NavItemDef; collapsed: boolean }) 
 export function Sidebar() {
   const { sidebarCollapsed: collapsed, toggleSidebar } = useUiStore()
   const { user, logout } = useAuth()
+  const { puede, cargando } = usePermisos()
   const navigate = useNavigate()
+  // Solo las secciones con al menos una pantalla visible para este usuario.
+  const secciones = cargando
+    ? []
+    : NAV_SECTIONS.map((s) => ({ ...s, items: s.items.filter((i) => puede(i.permiso)) })).filter((s) => s.items.length)
 
   async function handleLogout() {
     await logout()
@@ -122,7 +128,7 @@ export function Sidebar() {
 
       {/* Navegación */}
       <nav className="mb-4 flex-1 space-y-0.5 overflow-y-auto px-2 py-1">
-        {NAV_SECTIONS.map((section, i) => (
+        {secciones.map((section, i) => (
           <div key={section.label} className="space-y-0.5">
             {collapsed ? (
               i > 0 && <div className="mx-3 my-2 border-t border-slate-800" />

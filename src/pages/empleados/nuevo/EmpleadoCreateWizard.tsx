@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { Stepper } from '@/components/ui/stepper'
-import { empleadoCreateSchema, WIZARD_STEP_FIELDS, type EmpleadoCreateValues } from '@/lib/validators'
+import { crearEsquemaAltaEmpleado, WIZARD_STEP_FIELDS, type EmpleadoCreateValues } from '@/lib/validators'
+import { usePermisos } from '@/hooks/usePermisos'
 import type { CreateEmpleadoInput } from '@/types'
 import { useCrearAltaEmpleado } from '@/hooks/useEmpleados'
 import { useDepartamentos, usePuestos } from '@/hooks/useCompanyCatalogos'
@@ -23,9 +24,10 @@ export default function EmpleadoCreateWizard() {
   const crearMut = useCrearAltaEmpleado()
   const [step, setStep] = useState(0)
   const [resumen, setResumen] = useState<AltaResumen | null>(null)
+  const sinSueldos = !usePermisos().puede('rrhh.empleados', 'ver_salarios')
 
   const form = useForm<EmpleadoCreateValues>({
-    resolver: zodResolver(empleadoCreateSchema),
+    resolver: zodResolver(crearEsquemaAltaEmpleado({ sinSueldos })),
     mode: 'onTouched',
     defaultValues: { cantidad_hijos: 0, forma_pago: 'TRANSFERENCIA', frecuencia_pago: 'QUINCENAL' },
   })

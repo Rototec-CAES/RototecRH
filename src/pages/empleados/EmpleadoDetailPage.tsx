@@ -28,6 +28,7 @@ import {
 import { BajaDialog } from './BajaDialog'
 import { RegistrarBiometricoDialog } from './RegistrarBiometricoDialog'
 import type { EmpleadoBackend } from '@/types'
+import { usePermisos } from '@/hooks/usePermisos'
 
 /** Mapea un código/valor guardado a su etiqueta de catálogo (acepta value/codigo/codigoMintrab). */
 function labelDe(
@@ -63,6 +64,8 @@ export default function EmpleadoDetailPage() {
   const [bajaOpen, setBajaOpen] = useState(false)
   const [bioOpen, setBioOpen] = useState(false)
   const huellasQ = useHuellasBiotime()
+  const { puede } = usePermisos()
+  const verSueldos = puede('rrhh.empleados', 'ver_salarios')
 
   // Resolución de nombres de catálogo (cacheado por TanStack Query).
   // La empresa se busca dentro del país del propio empleado (paisId real, sin depender del SP con NULL).
@@ -152,19 +155,24 @@ export default function EmpleadoDetailPage() {
         }
         actions={
           <>
-            <DetailAction
-              icon="solar:pen-bold"
-              label="Editar datos"
-              onClick={() => navigate(`/empleados/${id}/editar`)}
-            />
+            {puede('rrhh.empleados', 'editar') && (
+              <DetailAction
+                icon="solar:pen-bold"
+                label="Editar datos"
+                onClick={() => navigate(`/empleados/${id}/editar`)}
+              />
+            )}
             {data.estaActivo ? (
+              puede('rrhh.empleados', 'eliminar') && (
               <DetailAction
                 icon="solar:user-minus-bold"
                 label="Dar de baja"
                 variant="danger"
                 onClick={() => setBajaOpen(true)}
               />
+              )
             ) : (
+              puede('rrhh.empleados', 'editar') && (
               <DetailAction
                 icon={reactivar.isPending ? 'svg-spinners:180-ring' : 'solar:user-check-bold'}
                 label={reactivar.isPending ? 'Reactivando…' : 'Reactivar'}
@@ -172,6 +180,7 @@ export default function EmpleadoDetailPage() {
                 onClick={onReactivar}
                 disabled={reactivar.isPending}
               />
+              )
             )}
           </>
         }
@@ -187,7 +196,7 @@ export default function EmpleadoDetailPage() {
               </DetailChip>
             )}
             <DetailChip icon="solar:calendar-bold">Ingresó el {formatDate(data.fechaContratacion)}</DetailChip>
-            {data.salarioBaseContrato != null && (
+            {verSueldos && data.salarioBaseContrato != null && (
               <DetailChip icon="solar:wallet-money-bold">Salario base {formatQ(data.salarioBaseContrato)}</DetailChip>
             )}
             {data.codigoEmpleadoBio != null ? (
@@ -232,7 +241,7 @@ export default function EmpleadoDetailPage() {
         }
       />
 
-      {data.estaActivo && data.codigoEmpleadoBio == null && (
+      {data.estaActivo && data.codigoEmpleadoBio == null && puede('rrhh.biometrico', 'editar') && (
         <Alert variant="warning" data-testid="rh-empleado__aviso-biometrico">
           <Icon icon="solar:fingerprint-bold" width={18} />
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -326,11 +335,13 @@ export default function EmpleadoDetailPage() {
             <Item label="Tipo de contrato" value={data.tipoContrato ?? '—'} />
             <Item label="Fecha de ingreso" value={formatDate(data.fechaContratacion)} />
             {data.fechaReingreso && <Item label="Fecha de reingreso" value={formatDate(data.fechaReingreso)} />}
-            <Item
-              label="Salario base"
-              value={data.salarioBaseContrato != null ? formatQ(data.salarioBaseContrato) : '—'}
-              strong
-            />
+            {verSueldos && (
+              <Item
+                label="Salario base"
+                value={data.salarioBaseContrato != null ? formatQ(data.salarioBaseContrato) : '—'}
+                strong
+              />
+            )}
             <Item label="Profesión" value={data.profesion || '—'} />
             <Item label="Título / diploma" value={data.titulo || '—'} />
           </dl>

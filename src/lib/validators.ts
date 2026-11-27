@@ -358,7 +358,7 @@ const empleadoBaseSchema = z
     ),
     salario_base_contrato: z.coerce.number().min(1000, 'Mínimo Q1,000'),
     profesion: optStr(100),
-    titulo: optStr(60),
+    titulo: optStr(250),
     forma_pago: reqStr('Selecciona la forma de pago'),
     frecuencia_pago: z.enum(['QUINCENAL', 'MENSUAL'], { message: 'Selecciona el tipo de nómina' }),
     codigo_banco: z.string().trim().max(10, 'Máximo 10 caracteres').optional().or(z.literal('')),
@@ -383,6 +383,8 @@ type OpcionesEmpleado = {
    * guardar cualquier otro dato). Si se cambia, sí se valida completo.
    */
   dpiOriginal?: string | null
+  /** Sin permiso de sueldos: el salario no se muestra ni se exige (el backend lo ignora). */
+  sinSueldos?: boolean
 }
 
 const soloAlfanumerico = (v: string | null | undefined) => (v ?? '').toUpperCase().replace(/[^0-9A-Z]/g, '')
@@ -425,8 +427,17 @@ const refinarEmpleado =
 
 /** Alta de empleado (wizard). */
 export const empleadoCreateSchema = empleadoBaseSchema.superRefine(refinarEmpleado({}))
+
+const baseSinSueldos = empleadoBaseSchema.extend({ salario_base_contrato: z.any().optional() })
+const esquemaSegunSueldos = (o: OpcionesEmpleado) =>
+  (o.sinSueldos
+    ? baseSinSueldos.superRefine((d, ctx) => refinarEmpleado(o)(d as z.infer<typeof empleadoBaseSchema>, ctx))
+    : empleadoBaseSchema.superRefine(refinarEmpleado(o))) as unknown as typeof empleadoCreateSchema
+
+/** Alta según los permisos del usuario (sin permiso de sueldos no se pide el salario). */
+export const crearEsquemaAltaEmpleado = (o: Pick<OpcionesEmpleado, 'sinSueldos'>) => esquemaSegunSueldos(o)
 /** Edición: mismas reglas, pero un documento viejo que no se toca no bloquea el guardado. */
-export const crearEsquemaEdicionEmpleado = (o: OpcionesEmpleado) => empleadoBaseSchema.superRefine(refinarEmpleado(o))
+export const crearEsquemaEdicionEmpleado = (o: OpcionesEmpleado) => esquemaSegunSueldos(o)
 
 
 export type EmpleadoCreateValues = z.infer<typeof empleadoCreateSchema>

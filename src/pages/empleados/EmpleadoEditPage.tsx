@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Panel } from '@/shared/report/report-ui'
 import { Skeleton } from '@/components/ui/skeleton'
 import { crearEsquemaEdicionEmpleado, type EmpleadoCreateValues } from '@/lib/validators'
+import { usePermisos } from '@/hooks/usePermisos'
 import type { CreateEmpleadoInput, EmpleadoBackend } from '@/types'
 import { useActualizarEmpleado, useEmpleadoBackend } from '@/hooks/useEmpleados'
 import { extractApiErrorMessage } from '@/api/client'
@@ -174,10 +175,11 @@ function EditForm({
         : null,
     [empleado, puestos],
   )
+  const sinSueldos = !usePermisos().puede('rrhh.empleados', 'ver_salarios')
   const form = useForm<EmpleadoCreateValues>({
     // Un DPI viejo (p. ej. incompleto, aceptado por la carga masiva) no bloquea guardar otros datos;
-    // si el usuario lo cambia, sí se valida completo.
-    resolver: zodResolver(crearEsquemaEdicionEmpleado({ dpiOriginal: empleado.numeroIdentificacionNacional })),
+    // si el usuario lo cambia, sí se valida completo. Sin permiso de sueldos, el salario no se pide.
+    resolver: zodResolver(crearEsquemaEdicionEmpleado({ dpiOriginal: empleado.numeroIdentificacionNacional, sinSueldos })),
     mode: 'onTouched',
     defaultValues: {
       ...aValoresForm(empleado),
@@ -233,7 +235,7 @@ function EditForm({
   }, [nombreSugerido])
 
   const valores = form.watch()
-  const { porSeccion: faltanPor, total: totalFaltan } = faltantesDesdeFormulario(valores)
+  const { porSeccion: faltanPor, total: totalFaltan } = faltantesDesdeFormulario(valores, { sinSueldos })
 
   const nombre = nombreEmpleado(empleado)
   const puesto = puestoOptions.find((p) => p.id === empleado.idPuesto)?.nombre

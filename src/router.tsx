@@ -1,6 +1,8 @@
-import { Navigate, createBrowserRouter } from 'react-router-dom'
+import { createBrowserRouter } from 'react-router-dom'
 import { AppShell } from '@/components/layout/AppShell'
 import { RequireAuth } from '@/components/auth/RequireAuth'
+import { ConPermiso, InicioSegunPermisos } from '@/components/auth/ConPermiso'
+import type { AccionRH, PaginaRH } from '@/api/permisos'
 import LoginPage from '@/pages/auth/LoginPage'
 import EmpleadosListPage from '@/pages/empleados/EmpleadosListPage'
 import EmpleadoDetailPage from '@/pages/empleados/EmpleadoDetailPage'
@@ -18,6 +20,14 @@ import CargaTurnosPage from '@/pages/carga-turnos/CargaTurnosPage'
 import CapacitacionesPage from '@/pages/capacitaciones/CapacitacionesPage'
 import ExamenPublicoPage from '@/pages/capacitaciones/ExamenPublicoPage'
 import SalaPublicaPage from '@/pages/capacitaciones/SalaPublicaPage'
+import PermisosPage from '@/pages/permisos/PermisosPage'
+
+/** Envuelve la pantalla con su permiso (ver t2_Paginas del dominio 'rrhh'). */
+const p = (pagina: PaginaRH, el: React.ReactNode, accion?: AccionRH) => (
+  <ConPermiso pagina={pagina} accion={accion}>
+    {el}
+  </ConPermiso>
+)
 
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
@@ -30,22 +40,23 @@ export const router = createBrowserRouter([
         path: '/',
         element: <AppShell />,
         children: [
-          { index: true, element: <Navigate to="/empleados" replace /> },
-          { path: 'empleados', element: <EmpleadosListPage /> },
-          { path: 'empleados/nuevo', element: <EmpleadoCreateWizard /> },
-          { path: 'empleados/actualizacion-masiva', element: <ActualizacionMasivaPage /> },
-          { path: 'empleados/biometrico', element: <BiometricoPendientesPage /> },
-          { path: 'empleados/:id', element: <EmpleadoDetailPage /> },
-          { path: 'empleados/:id/editar', element: <EmpleadoEditPage /> },
-          { path: 'asistencias', element: <AsistenciasListPage /> },
-          { path: 'asistencias/:id', element: <AsistenciaEmpleadoPage /> },
-          { path: 'ausencias', element: <AusenciasPage /> },
-          { path: 'organizacion', element: <OrganizacionPage /> },
-          { path: 'planilla', element: <PlanillaPage /> },
-          { path: 'horas-extra', element: <HorasExtraPage /> },
-          { path: 'carga-turnos', element: <CargaTurnosPage /> },
-          { path: 'capacitaciones', element: <CapacitacionesPage /> },
-          { path: '*', element: <Navigate to="/empleados" replace /> },
+          { index: true, element: <InicioSegunPermisos /> },
+          { path: 'empleados', element: p('rrhh.empleados', <EmpleadosListPage />) },
+          { path: 'empleados/nuevo', element: p('rrhh.empleados', <EmpleadoCreateWizard />, 'crear') },
+          { path: 'empleados/actualizacion-masiva', element: p('rrhh.actualizacion-masiva', <ActualizacionMasivaPage />) },
+          { path: 'empleados/biometrico', element: p('rrhh.biometrico', <BiometricoPendientesPage />) },
+          { path: 'empleados/:id', element: p('rrhh.empleados', <EmpleadoDetailPage />) },
+          { path: 'empleados/:id/editar', element: p('rrhh.empleados', <EmpleadoEditPage />, 'editar') },
+          { path: 'asistencias', element: p('rrhh.asistencias', <AsistenciasListPage />) },
+          { path: 'asistencias/:id', element: p('rrhh.asistencias', <AsistenciaEmpleadoPage />) },
+          { path: 'ausencias', element: p('rrhh.ausencias', <AusenciasPage />) },
+          { path: 'organizacion', element: p('rrhh.organizacion', <OrganizacionPage />) },
+          { path: 'planilla', element: p('rrhh.planilla', <PlanillaPage />) },
+          { path: 'horas-extra', element: p('rrhh.horas-extra', <HorasExtraPage />) },
+          { path: 'carga-turnos', element: p('rrhh.carga-turnos', <CargaTurnosPage />) },
+          { path: 'capacitaciones', element: p('rrhh.capacitaciones', <CapacitacionesPage />) },
+          { path: 'permisos', element: p('rrhh.permisos', <PermisosPage />) },
+          { path: '*', element: <InicioSegunPermisos /> },
         ],
       },
     ],

@@ -51,6 +51,7 @@ import { EmpleadoStatusBadge } from './EmpleadoStatusBadge'
 import { BiometricoBadge } from './BiometricoBadge'
 import { RegistrarBiometricoDialog, type EmpleadoParaBiometrico } from './RegistrarBiometricoDialog'
 import type { EmpleadoBackend } from '@/types'
+import { usePermisos } from '@/hooks/usePermisos'
 
 type EstadoFilter = 'TODOS' | 'ACTIVO' | 'BAJA'
 type BioFilter = 'TODOS' | EstadoBiometrico
@@ -80,6 +81,8 @@ function displayName(e: EmpleadoBackend): string {
 
 export default function EmpleadosListPage() {
   const navigate = useNavigate()
+  const { puede } = usePermisos()
+  const verSueldos = puede('rrhh.empleados', 'ver_salarios')
   const { data, isLoading, isError } = useEmpleadosBackendList()
   const huellasQ = useHuellasBiotime()
   const { options: puestoOptions } = usePuestoOptions()
@@ -96,9 +99,10 @@ export default function EmpleadosListPage() {
    */
   const fichas = useMemo(() => {
     const m = new Map<number, FaltantesFicha>()
-    for (const e of data ?? []) if (e.estaActivo) m.set(e.id, faltantesDesdeEmpleado(e, puestoOptions))
+    // Sin permiso de sueldos el salario llega vacío: no lo contamos como faltante.
+    for (const e of data ?? []) if (e.estaActivo) m.set(e.id, faltantesDesdeEmpleado(e, puestoOptions, { sinSueldos: !verSueldos }))
     return m
-  }, [data, puestoOptions])
+  }, [data, puestoOptions, verSueldos])
   const fichaCumple = (e: EmpleadoBackend, f: FichaFilter) => {
     if (f === 'TODAS') return true
     const fi = fichas.get(e.id)
@@ -237,7 +241,7 @@ export default function EmpleadosListPage() {
         dpi: e.numeroIdentificacionNacional ?? '',
         empresa: empresaNombre(e.empresaId),
         puesto: puestoNombre(e.idPuesto),
-        salario: e.salarioBaseContrato ?? '',
+        ...(verSueldos ? { salario: e.salarioBaseContrato ?? '' } : {}),
         contratacion: formatDate(e.fechaContratacion),
         estado: e.estaActivo ? 'Activo' : 'Baja',
         ficha: !e.estaActivo ? '' : (fichas.get(e.id)?.total ?? 0) === 0 ? 'Completa' : `Faltan ${fichas.get(e.id)!.total}`,
@@ -272,7 +276,7 @@ export default function EmpleadosListPage() {
             { header: 'DPI', key: 'dpi', width: 18 },
             { header: 'Empresa', key: 'empresa', width: 28 },
             { header: 'Puesto', key: 'puesto', width: 28 },
-            { header: 'Salario base', key: 'salario', width: 16 },
+            ...(verSueldos ? [{ header: 'Salario base', key: 'salario', width: 16 }] : []),
             { header: 'Fecha de ingreso', key: 'contratacion', width: 18 },
             { header: 'Estado', key: 'estado', width: 10 },
             { header: 'Ficha', key: 'ficha', width: 12 },
@@ -285,7 +289,7 @@ export default function EmpleadosListPage() {
           ],
           filas,
           ajustar: (ws) => {
-            ws.getColumn('salario').numFmt = '"Q" #,##0.00'
+            if (verSueldos) ws.getColumn('salario').numFmt = '"Q" #,##0.00'
           },
         },
       ])
@@ -301,13 +305,13 @@ export default function EmpleadosListPage() {
   const modo: 'completa' | 'compacta' | 'tarjetas' =
     ancho === 0 || ancho >= 1320 ? 'completa' : ancho >= 940 ? 'compacta' : 'tarjetas'
   const completa = modo === 'completa'
-  const columnas = completa ? 10 : 7
+  const columnas = (completa ? 10 : 7) - (verSueldos ? 0 : 1)
   const celda = 'px-3 py-2.5'
 
   /** Botones de la fila/tarjeta. `soloIcono` ahorra espacio en los diseños angostos. */
   const acciones = (e: EmpleadoBackend, soloIcono: boolean) => (
     <div className="flex shrink-0 justify-end gap-1">
-      {e.estaActivo && e.codigoEmpleadoBio == null && (
+      {e.estaActivo && e.codigoEmpleadoBio == null && puede('rrhh.biometrico', 'editar') && (
         <Button
           variant="ghost"
           size="sm"
@@ -348,6 +352,7 @@ export default function EmpleadosListPage() {
           icono="solar:users-group-rounded-bold"
           descripcion="Listado del personal. Haz clic en una fila para ver la ficha completa del empleado."
         >
+          {puede('rrhh.empleados', 'exportar') && (
           <Button
             className="bg-emerald-600 text-white hover:bg-emerald-700"
             onClick={descargarExcel}
@@ -357,6 +362,8 @@ export default function EmpleadosListPage() {
             <Icon icon={exportando ? 'svg-spinners:180-ring' : 'solar:file-download-linear'} />
             Excel
           </Button>
+          )}
+          {puede('rrhh.actualizacion-masiva') && (
           <Button
             variant="outline"
             onClick={() => navigate('/empleados/actualizacion-masiva')}
@@ -365,10 +372,13 @@ export default function EmpleadosListPage() {
             <Icon icon="solar:document-add-linear" />
             Actualización masiva
           </Button>
+          )}
+          {puede('rrhh.empleados', 'crear') && (
           <Button onClick={() => navigate('/empleados/nuevo')} data-testid={`${TID}__btn-nuevo`}>
             <Icon icon="solar:user-plus-bold" />
             Nuevo empleado
           </Button>
+          )}
         </PageHeader>
 
         <FilterRow>
@@ -548,7 +558,7 @@ export default function EmpleadosListPage() {
               </div>
 
               <div className="ml-auto flex flex-wrap items-center gap-1.5">
-                {resumenFicha.incompletas > 0 && (
+                {resumenFicha.incompletas > 0 && puede('rrhh.actualizacion-masiva') && (
                   <Button
                     size="sm"
                     variant="outline"
@@ -561,7 +571,7 @@ export default function EmpleadosListPage() {
                     Completar con Excel
                   </Button>
                 )}
-                {resumenBio.SIN_BIOMETRICO > 0 && (
+                {resumenBio.SIN_BIOMETRICO > 0 && puede('rrhh.biometrico') && (
                   <Button
                     size="sm"
                     className="h-7 bg-amber-600 px-2.5 text-xs text-white hover:bg-amber-700"
@@ -647,7 +657,7 @@ export default function EmpleadosListPage() {
                         </div>
                         <div className="flex flex-wrap items-center gap-1">
                           <EmpleadoStatusBadge estado={e.estaActivo ? 'ACTIVO' : 'BAJA'} />
-                          <FichaIndicador ficha={fichas.get(e.id)} onCompletar={() => navigate(`/empleados/${e.id}/editar`)} />
+                          <FichaIndicador ficha={fichas.get(e.id)} onCompletar={puede('rrhh.empleados', 'editar') ? () => navigate(`/empleados/${e.id}/editar`) : undefined} />
                         </div>
                       </div>
                       <div className="text-sm text-slate-600">
@@ -655,12 +665,14 @@ export default function EmpleadosListPage() {
                         <div className="text-xs text-slate-500">{empresaNombre(e.empresaId)}</div>
                       </div>
                       <dl className="grid grid-cols-2 gap-2 text-xs">
+                        {verSueldos && (
                         <div>
                           <dt className="text-slate-400">Salario base</dt>
                           <dd className="font-medium tabular-nums text-slate-700">
                             {e.salarioBaseContrato != null ? formatQ(e.salarioBaseContrato) : '—'}
                           </dd>
                         </div>
+                        )}
                         <div>
                           <dt className="text-slate-400">Ingreso</dt>
                           <dd className="tabular-nums text-slate-700">{formatDate(e.fechaContratacion)}</dd>
@@ -703,7 +715,7 @@ export default function EmpleadosListPage() {
               {completa && <DataTableHeadCell className={celda}>DPI</DataTableHeadCell>}
               {completa && <DataTableHeadCell className={celda}>Empresa</DataTableHeadCell>}
               <DataTableHeadCell className={celda}>Puesto</DataTableHeadCell>
-              <DataTableHeadCell className={cn('whitespace-nowrap text-right', celda)}>Salario base</DataTableHeadCell>
+              {verSueldos && <DataTableHeadCell className={cn('whitespace-nowrap text-right', celda)}>Salario base</DataTableHeadCell>}
               {completa && <DataTableHeadCell className={celda}>Ingreso</DataTableHeadCell>}
               <DataTableHeadCell className={celda}>Estado</DataTableHeadCell>
               <DataTableHeadCell className={cn('text-right', completa ? 'w-28' : 'w-20', celda)}>
@@ -756,9 +768,11 @@ export default function EmpleadosListPage() {
                       <div className="break-words">{puestoNombre(e.idPuesto)}</div>
                       {!completa && <div className="text-xs text-slate-400">{empresaNombre(e.empresaId)}</div>}
                     </DataTableCell>
+                    {verSueldos && (
                     <DataTableCell className={cn('whitespace-nowrap text-right align-top tabular-nums text-slate-700', celda)}>
                       {e.salarioBaseContrato != null ? formatQ(e.salarioBaseContrato) : '—'}
                     </DataTableCell>
+                    )}
                     {completa && (
                       <DataTableCell className={cn('whitespace-nowrap align-top tabular-nums text-slate-600', celda)}>
                         {formatDate(e.fechaContratacion)}
@@ -767,7 +781,7 @@ export default function EmpleadosListPage() {
                     <DataTableCell className={cn('align-top', celda)}>
                       <div className="flex flex-wrap items-center gap-1">
                         <EmpleadoStatusBadge estado={e.estaActivo ? 'ACTIVO' : 'BAJA'} />
-                        <FichaIndicador ficha={fichas.get(e.id)} onCompletar={() => navigate(`/empleados/${e.id}/editar`)} />
+                        <FichaIndicador ficha={fichas.get(e.id)} onCompletar={puede('rrhh.empleados', 'editar') ? () => navigate(`/empleados/${e.id}/editar`) : undefined} />
                       </div>
                       {!completa && (
                         <div className="mt-1 whitespace-nowrap text-[11px] tabular-nums text-slate-400">
@@ -883,16 +897,16 @@ function FiltroChip({
 }
 
 /** "Faltan N datos" bajo el estado del empleado; clic = ir a completar la ficha. */
-function FichaIndicador({ ficha, onCompletar }: { ficha: FaltantesFicha | undefined; onCompletar: () => void }) {
+function FichaIndicador({ ficha, onCompletar }: { ficha: FaltantesFicha | undefined; onCompletar?: () => void }) {
   if (!ficha || ficha.total === 0) return null
   return (
     <button
       type="button"
       onClick={(ev) => {
         ev.stopPropagation()
-        onCompletar()
+        onCompletar?.()
       }}
-      title={`Ficha incompleta. Falta: ${ficha.lista.join(', ')}.\nClic para completarla.`}
+      title={`Ficha incompleta. Falta: ${ficha.lista.join(', ')}.${onCompletar ? '\nClic para completarla.' : ''}`}
       className="flex items-center gap-1 whitespace-nowrap rounded-md border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800 transition hover:bg-amber-100"
       data-testid="rh-empleados__ficha-incompleta"
     >
